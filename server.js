@@ -1,23 +1,14 @@
 const express = require("express");
 const Database = require("better-sqlite3");
 const path = require("path");
-const fs = require("fs");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 // --------------------
-// SQLite Setup (Persistent on Render, local for development)
+// SQLite Setup
 // --------------------
-const dbPath = process.env.RENDER ? path.join("/data", "visitors.db") : path.join(__dirname, "visitors.db");
-
-// Ensure the directory exists before trying to open the database
-const dbDir = path.dirname(dbPath);
-if (!fs.existsSync(dbDir)) {
-    fs.mkdirSync(dbDir, { recursive: true });
-}
-
-const db = new Database(dbPath);
+const db = new Database(path.join(__dirname, "visitors.db"));
 
 db.exec(`
     CREATE TABLE IF NOT EXISTS counters (
