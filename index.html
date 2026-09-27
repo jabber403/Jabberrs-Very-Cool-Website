@@ -6,11 +6,21 @@
 
 <p>Visitors: <span id="visitor-count">?</span></p>
 
+<p>Visitors: <span id="visitor-count" style="font-family: 'Impact', 'Arial Black', sans-serif; font-size: 1.5em; font-weight: bold; color: #ff00ff;">?</span></p>
+
 <script>
-    fetch('/api/visitor-count')
+    // Check if this session has already counted a visit
+    const hasVisited = sessionStorage.getItem('hasVisited');
+
+    // Choose which endpoint to hit based on whether they already visited this session
+    const endpoint = hasVisited ? '/api/visitor-count-view' : '/api/visitor-count';
+
+    fetch(endpoint)
         .then(response => response.json())
         .then(data => {
             document.getElementById('visitor-count').textContent = data.visitors;
+            // Mark session as visited so future refreshes won't increment it
+            sessionStorage.setItem('hasVisited', 'true');
         })
         .catch(error => {
             console.error('Error loading visitor count:', error);

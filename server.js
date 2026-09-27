@@ -3,10 +3,10 @@ const Database = require("better-sqlite3");
 const path = require("path");
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 // --------------------
-// SQLite
+// SQLite Setup
 // --------------------
 
 const db = new Database("visitors.db");
@@ -36,27 +36,34 @@ const getVisitors = db.prepare(`
 `);
 
 // --------------------
-// Visitor counter API
+// Visitor Counter APIs
 // --------------------
 
+// Increments the count (used for brand new sessions)
 app.get("/api/visitor-count", (req, res) => {
     incrementVisitor.run();
-
     const row = getVisitors.get();
-
     res.json({
-        visitors: row.value
+        visitors: row ? row.value : 0
+    });
+});
+
+// Gets the count WITHOUT incrementing (used for page refreshes in the same session)
+app.get("/api/visitor-count-view", (req, res) => {
+    const row = getVisitors.get();
+    res.json({
+        visitors: row ? row.value : 0
     });
 });
 
 // --------------------
-// Static website (pointing to root directory)
+// Static Website Files
 // --------------------
 
 app.use(express.static(path.join(__dirname, ".")));
 
 // --------------------
-// Start server
+// Start Server
 // --------------------
 
 app.listen(PORT, () => {
