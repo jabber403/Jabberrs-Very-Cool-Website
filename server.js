@@ -1,6 +1,7 @@
 const express = require("express");
 const Database = require("better-sqlite3");
 const path = require("path");
+const fs = require("fs");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -9,6 +10,13 @@ const PORT = process.env.PORT || 3000;
 // SQLite Setup (Persistent on Render, local for development)
 // --------------------
 const dbPath = process.env.RENDER ? path.join("/data", "visitors.db") : path.join(__dirname, "visitors.db");
+
+// Ensure the directory exists before trying to open the database
+const dbDir = path.dirname(dbPath);
+if (!fs.existsSync(dbDir)) {
+    fs.mkdirSync(dbDir, { recursive: true });
+}
+
 const db = new Database(dbPath);
 
 db.exec(`
@@ -39,7 +47,6 @@ const getVisitors = db.prepare(`
 // Visitor Counter APIs
 // --------------------
 
-// Increments the count (used for brand new browsers)
 app.get("/api/visitor-count", (req, res) => {
     incrementVisitor.run();
     const row = getVisitors.get();
@@ -48,7 +55,6 @@ app.get("/api/visitor-count", (req, res) => {
     });
 });
 
-// Gets the count WITHOUT incrementing (used for returning browsers)
 app.get("/api/visitor-count-view", (req, res) => {
     const row = getVisitors.get();
     res.json({
