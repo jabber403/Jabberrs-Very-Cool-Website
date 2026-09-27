@@ -4,17 +4,17 @@
     Visitors: <span id="visitor-count">...</span>
 </p>
 
+<p>Visitors: <span id="visitor-count">?</span></p>
+
 <script>
-fetch("/api/visitor-count")
-    .then(response => response.json())
-    .then(data => {
-        document.getElementById("visitor-count").textContent =
-            data.visitors.toLocaleString();
-    })
-    .catch(error => {
-        console.error("Couldn't get visitor count:", error);
-        document.getElementById("visitor-count").textContent = "?";
-    });
+    fetch('/api/visitor-count')
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('visitor-count').textContent = data.visitors;
+        })
+        .catch(error => {
+            console.error('Error loading visitor count:', error);
+        });
 </script>
 
 <a href="./meetjabberr.html"><button>Meet Jabberr</button></a>
