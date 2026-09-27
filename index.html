@@ -1,4 +1,21 @@
-<h1 style="font-family: 'Comic Sans MS', cursive, sans-serif;">Welcome to the Jabberrs Very Cool Website!!</h1>
+<h1 style="font-family: 'Comic Sans MS', cursive, sans-serif;">Welcome to Jabberrs Very Cool Website!!</h1>
+
+<p>
+    Visitors: <span id="visitor-count">...</span>
+</p>
+
+<script>
+fetch("/api/visitor-count")
+    .then(response => response.json())
+    .then(data => {
+        document.getElementById("visitor-count").textContent =
+            data.visitors.toLocaleString();
+    })
+    .catch(error => {
+        console.error("Couldn't get visitor count:", error);
+        document.getElementById("visitor-count").textContent = "?";
+    });
+</script>
 
 <a href="./meetjabberr.html"><button>Meet Jabberr</button></a>
 
@@ -6,7 +23,7 @@
 
 <h3>info:</h3>
 <div>
-    <p>Jabberrs Very Cool Website is made by Jabberr which makes Jabberr Linux</p>
+    <p>Jabberrs Very Cool Website is made by Jabberr which is who makes Jabberr Linux</p>
 </div>
 
 <h2>Other websites:</h2>
@@ -28,4 +45,5 @@
 <h2>Jabberrs Socials:</h2>
 <div>
     <a href="https://www.youtube.com/@RetroJabberr"><button>Jabberrs YouTube (Retro Jabberr)</button></a>
+    <a href="https://github.com/jabber403"><button>Jabberrs GitHub</button></a>
 </div>
