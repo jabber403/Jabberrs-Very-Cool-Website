@@ -4,23 +4,6 @@
     Visitors: <span id="visitor-count" style="font-family: 'Impact', 'Arial Black', sans-serif; font-size: 1.5em; font-weight: bold; color: #ff00ff;">?</span>
 </p>
 
-<script>
-    // Check if this browser has already counted a visit permanently
-    const hasVisited = localStorage.getItem('hasVisited');
-    const endpoint = hasVisited ? '/api/visitor-count-view' : '/api/visitor-count';
-
-    fetch(endpoint)
-        .then(response => response.json())
-        .then(data => {
-            document.getElementById('visitor-count').textContent = data.visitors;
-            // Permanently remember this browser
-            localStorage.setItem('hasVisited', 'true');
-        })
-        .catch(error => {
-            console.error('Error loading visitor count:', error);
-        });
-</script>
-
 <a href="./meetjabberr.html"><button>Meet Jabberr</button></a>
 
 <a href="https://www.venmo.com/u/Jabberrr"><button>Donate?!</button></a>
