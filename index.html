@@ -5,18 +5,16 @@
 </p>
 
 <script>
-    // Check if this session has already counted a visit
-    const hasVisited = sessionStorage.getItem('hasVisited');
-
-    // Choose which endpoint to hit based on whether they already visited this session
+    // Check if this browser has already counted a visit permanently
+    const hasVisited = localStorage.getItem('hasVisited');
     const endpoint = hasVisited ? '/api/visitor-count-view' : '/api/visitor-count';
 
     fetch(endpoint)
         .then(response => response.json())
         .then(data => {
             document.getElementById('visitor-count').textContent = data.visitors;
-            // Mark session as visited so future refreshes won't increment it
-            sessionStorage.setItem('hasVisited', 'true');
+            // Permanently remember this browser
+            localStorage.setItem('hasVisited', 'true');
         })
         .catch(error => {
             console.error('Error loading visitor count:', error);

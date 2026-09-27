@@ -6,10 +6,10 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // --------------------
-// SQLite Setup
+// SQLite Setup (Persistent on Render, local for development)
 // --------------------
-
-const db = new Database("visitors.db");
+const dbPath = process.env.RENDER ? path.join("/data", "visitors.db") : path.join(__dirname, "visitors.db");
+const db = new Database(dbPath);
 
 db.exec(`
     CREATE TABLE IF NOT EXISTS counters (
@@ -39,7 +39,7 @@ const getVisitors = db.prepare(`
 // Visitor Counter APIs
 // --------------------
 
-// Increments the count (used for brand new sessions)
+// Increments the count (used for brand new browsers)
 app.get("/api/visitor-count", (req, res) => {
     incrementVisitor.run();
     const row = getVisitors.get();
@@ -48,7 +48,7 @@ app.get("/api/visitor-count", (req, res) => {
     });
 });
 
-// Gets the count WITHOUT incrementing (used for page refreshes in the same session)
+// Gets the count WITHOUT incrementing (used for returning browsers)
 app.get("/api/visitor-count-view", (req, res) => {
     const row = getVisitors.get();
     res.json({
