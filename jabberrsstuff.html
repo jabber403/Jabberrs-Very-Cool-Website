@@ -25,9 +25,7 @@
 
         <h2>Create a Post</h2>
         <form id="postForm" style="position: relative;">
-            <textarea id="postInput" placehgit add .
-git commit -m "Update"
-git push origin mainolder="What's on your mind? Use @username..." rows="3" cols="40" required></textarea><br>
+            <textarea id="postInput" placeholder="What's on your mind? Use @username..." rows="3" cols="40" required></textarea><br>
             <input type="file" id="postFileInput"><br>
             <button type="submit">Publish Post</button>
             <!-- Autocomplete Dropdown for Posts -->
@@ -35,6 +33,9 @@ git push origin mainolder="What's on your mind? Use @username..." rows="3" cols=
         </form>
 
         <h2>Posts Feed</h2>
+        <!-- Search Bar -->
+        <input type="text" id="searchInput" placeholder="Search posts by keyword or user..." style="width: 300px; margin-bottom: 10px;"><br>
+        
         <div id="postsFeed"></div>
     </div>
 
@@ -54,9 +55,11 @@ git push origin mainolder="What's on your mind? Use @username..." rows="3" cols=
         const postFileInput = document.getElementById('postFileInput');
         const postsFeed = document.getElementById('postsFeed');
         const postAutocomplete = document.getElementById('postAutocomplete');
+        const searchInput = document.getElementById('searchInput');
 
         let username = localStorage.getItem('jabber_username') || '';
         let knownUsers = [];
+        let allPosts = []; // Track all loaded posts for searching
 
         if (username) {
             displayUsername.textContent = username;
@@ -141,22 +144,27 @@ git push origin mainolder="What's on your mind? Use @username..." rows="3" cols=
             setTimeout(() => { postAutocomplete.style.display = 'none'; }, 200);
         });
 
+        // Search filtering event listener
+        searchInput.addEventListener('input', () => {
+            renderPostsFeed();
+        });
+
         socket.on('init_history', (data) => {
-            postsFeed.innerHTML = '';
-            data.posts.forEach(post => renderPost(post, false));
+            allPosts = data.posts;
+            renderPostsFeed();
         });
 
         socket.on('new_post', (post) => {
-            renderPost(post, true);
+            allPosts.unshift(post);
+            renderPostsFeed();
         });
 
         socket.on('update_post', (updatedPost) => {
-            const existingElement = document.getElementById(updatedPost.id);
-            if (existingElement) {
-                const tempDiv = document.createElement('div');
-                tempDiv.innerHTML = buildPostHTML(updatedPost);
-                existingElement.replaceWith(tempDiv.firstElementChild);
+            const index = allPosts.findIndex(p => p.id === updatedPost.id);
+            if (index !== -1) {
+                allPosts[index] = updatedPost;
             }
+            renderPostsFeed();
         });
 
         postForm.addEventListener('submit', (e) => {
@@ -181,11 +189,23 @@ git push origin mainolder="What's on your mind? Use @username..." rows="3" cols=
             }
         });
 
-        function renderPost(post, isNew) {
-            const postWrapper = document.createElement('div');
-            postWrapper.id = post.id;
-            postWrapper.innerHTML = buildPostHTML(post);
-            postsFeed.prepend(postWrapper);
+        function renderPostsFeed() {
+            postsFeed.innerHTML = '';
+            const query = searchInput.value.toLowerCase();
+
+            // Filter posts based on search query matching text or username
+            const filteredPosts = allPosts.filter(post => {
+                const textMatch = post.text && post.text.toLowerCase().includes(query);
+                const userMatch = post.username && post.username.toLowerCase().includes(query);
+                return textMatch || userMatch;
+            });
+
+            filteredPosts.forEach(post => {
+                const postWrapper = document.createElement('div');
+                postWrapper.id = post.id;
+                postWrapper.innerHTML = buildPostHTML(post);
+                postsFeed.appendChild(postWrapper);
+            });
         }
 
         function buildPostHTML(post) {
