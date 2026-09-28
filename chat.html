@@ -21,36 +21,48 @@
     <div id="chat-section" style="display: none;">
         <p>Logged in as: <strong id="displayUsername"></strong> <button id="changeNameBtn">Change</button></p>
         
-        <!-- Online Users List -->
+        <!-- View Toggle Navigation Buttons -->
         <div>
-            <strong>Online Users:</strong>
-            <ul id="onlineUsersList"></ul>
+            <button id="publicChatViewBtn">Public Chat Room</button>
+            <button id="dmViewBtn">Direct Messages (DMs)</button>
         </div>
 
         <hr>
 
-        <!-- Public Messages Container -->
-        <h2>Public Chat Room</h2>
-        <div id="chatBox" style="border: 1px solid black; height: 250px; overflow-y: scroll; margin-bottom: 10px; padding: 5px;"></div>
+        <!-- PUBLIC CHAT CONTAINER -->
+        <div id="publicChatContainer">
+            <h2>Public Chat Room</h2>
+            <!-- Messages Container -->
+            <div id="chatBox" style="border: 1px solid black; height: 250px; overflow-y: scroll; margin-bottom: 10px; padding: 5px;"></div>
 
-        <!-- Message Input Form -->
-        <form id="chatForm">
-            <input type="text" id="messageInput" placeholder="Type a public message or use @username..." autocomplete="off" required>
-            <input type="file" id="fileInput">
-            <button type="submit">Send Public</button>
-        </form>
+            <!-- Message Input Form -->
+            <form id="chatForm">
+                <input type="text" id="messageInput" placeholder="Type a public message or use @username..." autocomplete="off" required>
+                <input type="file" id="fileInput">
+                <button type="submit">Send Public</button>
+            </form>
+        </div>
 
-        <hr>
+        <!-- DIRECT MESSAGES CONTAINER (Hidden by default) -->
+        <div id="dmContainer" style="display: none;">
+            <h2>Direct Messages</h2>
+            
+            <!-- Online Users List for DMs -->
+            <div>
+                <strong>Online Users:</strong>
+                <ul id="onlineUsersList"></ul>
+            </div>
 
-        <!-- Direct Messages Section -->
-        <h2>Direct Messages (DMs)</h2>
-        <p>Currently messaging: <strong id="currentDmTarget">Select a user from above</strong></p>
-        <div id="dmBox" style="border: 1px solid black; height: 200px; overflow-y: scroll; margin-bottom: 10px; padding: 5px;"></div>
+            <hr>
 
-        <form id="dmForm">
-            <input type="text" id="dmInput" placeholder="Type a private message..." autocomplete="off" required>
-            <button type="submit" id="sendDmBtn" disabled>Send DM</button>
-        </form>
+            <p>Currently messaging: <strong id="currentDmTarget">Select a user from above</strong></p>
+            <div id="dmBox" style="border: 1px solid black; height: 200px; overflow-y: scroll; margin-bottom: 10px; padding: 5px;"></div>
+
+            <form id="dmForm">
+                <input type="text" id="dmInput" placeholder="Type a private message..." autocomplete="off" required>
+                <button type="submit" id="sendDmBtn" disabled>Send DM</button>
+            </form>
+        </div>
     </div>
 
     <!-- Include Socket.io Client Script -->
@@ -64,8 +76,14 @@
         const joinBtn = document.getElementById('joinBtn');
         const displayUsername = document.getElementById('displayUsername');
         const changeNameBtn = document.getElementById('changeNameBtn');
-        const onlineUsersList = document.getElementById('onlineUsersList');
         
+        // View containers and buttons
+        const publicChatContainer = document.getElementById('publicChatContainer');
+        const dmContainer = document.getElementById('dmContainer');
+        const publicChatViewBtn = document.getElementById('publicChatViewBtn');
+        const dmViewBtn = document.getElementById('dmViewBtn');
+
+        const onlineUsersList = document.getElementById('onlineUsersList');
         const chatBox = document.getElementById('chatBox');
         const chatForm = document.getElementById('chatForm');
         const messageInput = document.getElementById('messageInput');
@@ -106,6 +124,17 @@
             } catch (e) {}
         }
 
+        // Toggle Views
+        publicChatViewBtn.addEventListener('click', () => {
+            publicChatContainer.style.display = 'block';
+            dmContainer.style.display = 'none';
+        });
+
+        dmViewBtn.addEventListener('click', () => {
+            publicChatContainer.style.display = 'none';
+            dmContainer.style.display = 'block';
+        });
+
         joinBtn.addEventListener('click', () => {
             const name = usernameInput.value.trim();
             if (name) {
@@ -130,7 +159,6 @@
             if (e.key === 'Enter') joinBtn.click();
         });
 
-        // Update online users list
         socket.on('update_user_list', (users) => {
             onlineUsersList.innerHTML = '';
             users.forEach(user => {
@@ -158,9 +186,7 @@
             appendMessage(msg, true);
         });
 
-        // Receive Direct Message
         socket.on('private_message', (dm) => {
-            // Only show if it involves the current user
             if (dm.sender === username || dm.recipient === username) {
                 const dmElement = document.createElement('div');
                 dmElement.innerHTML = `<strong>[DM - ${dm.timestamp}] ${escapeHTML(dm.sender)} to ${escapeHTML(dm.recipient)}:</strong> ${escapeHTML(dm.text)}`;
@@ -205,7 +231,6 @@
             }
         });
 
-        // Send Direct Message form handler
         dmForm.addEventListener('submit', (e) => {
             e.preventDefault();
             const text = dmInput.value.trim();
