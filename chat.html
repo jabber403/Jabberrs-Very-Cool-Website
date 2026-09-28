@@ -19,7 +19,7 @@
 
     <!-- Chat Section (Hidden until username is set) -->
     <div id="chat-section" style="display: none;">
-        <p>Logged in as: <strong id="displayUsername"></strong></p>
+        <p>Logged in as: <strong id="displayUsername"></strong> <button id="changeNameBtn">Change</button></p>
         
         <!-- Messages Container -->
         <div id="chatBox" style="border: 1px solid black; height: 300px; overflow-y: scroll; margin-bottom: 10px; padding: 5px;"></div>
@@ -42,13 +42,20 @@
         const usernameInput = document.getElementById('usernameInput');
         const joinBtn = document.getElementById('joinBtn');
         const displayUsername = document.getElementById('displayUsername');
+        const changeNameBtn = document.getElementById('changeNameBtn');
         
         const chatBox = document.getElementById('chatBox');
         const chatForm = document.getElementById('chatForm');
         const messageInput = document.getElementById('messageInput');
         const fileInput = document.getElementById('fileInput');
 
-        let username = '';
+        let username = localStorage.getItem('jabber_username') || '';
+
+        if (username) {
+            displayUsername.textContent = username;
+            loginSection.style.display = 'none';
+            chatSection.style.display = 'block';
+        }
 
         // Request browser notification permissions on load
         if (window.Notification && Notification.permission !== "granted") {
@@ -62,15 +69,13 @@
                 const oscillator = audioCtx.createOscillator();
                 const gainNode = audioCtx.createGain();
                 oscillator.type = 'sine';
-                oscillator.frequency.setValueAtTime(440, audioCtx.currentTime); // A4 note
+                oscillator.frequency.setValueAtTime(440, audioCtx.currentTime);
                 gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
                 oscillator.connect(gainNode);
                 gainNode.connect(audioCtx.destination);
                 oscillator.start();
                 oscillator.stop(audioCtx.currentTime + 0.15);
-            } catch (e) {
-                // Audio context blocked before user interaction or not supported
-            }
+            } catch (e) {}
         }
 
         // Handle joining chat
@@ -78,6 +83,7 @@
             const name = usernameInput.value.trim();
             if (name) {
                 username = name;
+                localStorage.setItem('jabber_username', username);
                 displayUsername.textContent = username;
                 loginSection.style.display = 'none';
                 chatSection.style.display = 'block';
@@ -86,16 +92,20 @@
             }
         });
 
-        // Allow pressing Enter in username field
+        changeNameBtn.addEventListener('click', () => {
+            loginSection.style.display = 'block';
+            chatSection.style.display = 'none';
+            usernameInput.value = username;
+        });
+
         usernameInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                joinBtn.click();
-            }
+            if (e.key === 'Enter') joinBtn.click();
         });
 
         // Receive past message history upon connection
-        socket.on('init_history', (history) => {
-            history.forEach(msg => appendMessage(msg, false));
+        socket.on('init_history', (data) => {
+            chatBox.innerHTML = '';
+            data.messages.forEach(msg => appendMessage(msg, false));
         });
 
         // Receive new incoming messages
@@ -112,7 +122,6 @@
             if (!text.trim() && !file) return;
 
             if (file) {
-                // Read file as Base64 data URL to send over Socket.io
                 const reader = new FileReader();
                 reader.onload = function(event) {
                     socket.emit('chat_message', {
@@ -138,15 +147,13 @@
         function appendMessage(msg, isNew) {
             const messageElement = document.createElement('div');
             
-            // Check if current user is mentioned using @username
-            const isMentioned = msg.text.includes(`@${username}`);
+            const isMentioned = username && msg.text.includes(`@${username}`);
             if (isMentioned) {
-                messageElement.style.backgroundColor = '#ffff99'; // Highlight yellow if mentioned
+                messageElement.style.backgroundColor = '#ffff99';
             }
 
             let contentHTML = `<strong>[${msg.timestamp}] ${escapeHTML(msg.username)}:</strong> ${escapeHTML(msg.text)}`;
 
-            // Render file if attached
             if (msg.file) {
                 if (msg.file.type.startsWith('image/')) {
                     contentHTML += `<br><img src="${msg.file.data}" alt="${escapeHTML(msg.file.name)}" style="max-width: 200px; display: block; margin-top: 5px;">`;
@@ -159,7 +166,6 @@
             chatBox.appendChild(messageElement);
             chatBox.scrollTop = chatBox.scrollHeight;
 
-            // Trigger audio and browser notifications for incoming messages from others
             if (isNew && msg.username !== username) {
                 playBeep();
                 if (isMentioned && window.Notification && Notification.permission === "granted") {
@@ -168,7 +174,6 @@
             }
         }
 
-        // Simple utility to prevent basic HTML injection
         function escapeHTML(str) {
             if (!str) return '';
             return str.replace(/[&<>'"]/g, 
