@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Chat</title>
+    <title>Chat & DMs</title>
 </head>
 <body>
 
@@ -21,14 +21,35 @@
     <div id="chat-section" style="display: none;">
         <p>Logged in as: <strong id="displayUsername"></strong> <button id="changeNameBtn">Change</button></p>
         
-        <!-- Messages Container -->
-        <div id="chatBox" style="border: 1px solid black; height: 300px; overflow-y: scroll; margin-bottom: 10px; padding: 5px;"></div>
+        <!-- Online Users List -->
+        <div>
+            <strong>Online Users:</strong>
+            <ul id="onlineUsersList"></ul>
+        </div>
+
+        <hr>
+
+        <!-- Public Messages Container -->
+        <h2>Public Chat Room</h2>
+        <div id="chatBox" style="border: 1px solid black; height: 250px; overflow-y: scroll; margin-bottom: 10px; padding: 5px;"></div>
 
         <!-- Message Input Form -->
         <form id="chatForm">
-            <input type="text" id="messageInput" placeholder="Type a message or use @username..." autocomplete="off" autofocus required>
+            <input type="text" id="messageInput" placeholder="Type a public message or use @username..." autocomplete="off" required>
             <input type="file" id="fileInput">
-            <button type="submit">Send</button>
+            <button type="submit">Send Public</button>
+        </form>
+
+        <hr>
+
+        <!-- Direct Messages Section -->
+        <h2>Direct Messages (DMs)</h2>
+        <p>Currently messaging: <strong id="currentDmTarget">Select a user from above</strong></p>
+        <div id="dmBox" style="border: 1px solid black; height: 200px; overflow-y: scroll; margin-bottom: 10px; padding: 5px;"></div>
+
+        <form id="dmForm">
+            <input type="text" id="dmInput" placeholder="Type a private message..." autocomplete="off" required>
+            <button type="submit" id="sendDmBtn" disabled>Send DM</button>
         </form>
     </div>
 
@@ -43,26 +64,33 @@
         const joinBtn = document.getElementById('joinBtn');
         const displayUsername = document.getElementById('displayUsername');
         const changeNameBtn = document.getElementById('changeNameBtn');
+        const onlineUsersList = document.getElementById('onlineUsersList');
         
         const chatBox = document.getElementById('chatBox');
         const chatForm = document.getElementById('chatForm');
         const messageInput = document.getElementById('messageInput');
         const fileInput = document.getElementById('fileInput');
 
+        const dmBox = document.getElementById('dmBox');
+        const dmForm = document.getElementById('dmForm');
+        const dmInput = document.getElementById('dmInput');
+        const sendDmBtn = document.getElementById('sendDmBtn');
+        const currentDmTarget = document.getElementById('currentDmTarget');
+
         let username = localStorage.getItem('jabber_username') || '';
+        let selectedDmUser = '';
 
         if (username) {
             displayUsername.textContent = username;
             loginSection.style.display = 'none';
             chatSection.style.display = 'block';
+            socket.emit('register_user', username);
         }
 
-        // Request browser notification permissions on load
         if (window.Notification && Notification.permission !== "granted") {
             Notification.requestPermission();
         }
 
-        // Simple audio beep generator using Web Audio API
         function playBeep() {
             try {
                 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -78,7 +106,6 @@
             } catch (e) {}
         }
 
-        // Handle joining chat
         joinBtn.addEventListener('click', () => {
             const name = usernameInput.value.trim();
             if (name) {
@@ -87,6 +114,7 @@
                 displayUsername.textContent = username;
                 loginSection.style.display = 'none';
                 chatSection.style.display = 'block';
+                socket.emit('register_user', username);
             } else {
                 alert('Please enter a valid username.');
             }
@@ -102,18 +130,52 @@
             if (e.key === 'Enter') joinBtn.click();
         });
 
-        // Receive past message history upon connection
+        // Update online users list
+        socket.on('update_user_list', (users) => {
+            onlineUsersList.innerHTML = '';
+            users.forEach(user => {
+                if (user !== username) {
+                    const li = document.createElement('li');
+                    li.innerHTML = `${escapeHTML(user)} <button onclick="selectDmUser('${escapeHTML(user)}')">Message DM</button>`;
+                    onlineUsersList.appendChild(li);
+                }
+            });
+        });
+
+        window.selectDmUser = function(targetUser) {
+            selectedDmUser = targetUser;
+            currentDmTarget.textContent = targetUser;
+            sendDmBtn.disabled = false;
+            dmBox.innerHTML += `<p><small>--- Started DM conversation with ${escapeHTML(targetUser)} ---</small></p>`;
+        };
+
         socket.on('init_history', (data) => {
             chatBox.innerHTML = '';
             data.messages.forEach(msg => appendMessage(msg, false));
         });
 
-        // Receive new incoming messages
         socket.on('chat_message', (msg) => {
             appendMessage(msg, true);
         });
 
-        // Handle sending messages and files
+        // Receive Direct Message
+        socket.on('private_message', (dm) => {
+            // Only show if it involves the current user
+            if (dm.sender === username || dm.recipient === username) {
+                const dmElement = document.createElement('div');
+                dmElement.innerHTML = `<strong>[DM - ${dm.timestamp}] ${escapeHTML(dm.sender)} to ${escapeHTML(dm.recipient)}:</strong> ${escapeHTML(dm.text)}`;
+                dmBox.appendChild(dmElement);
+                dmBox.scrollTop = dmBox.scrollHeight;
+
+                if (dm.sender !== username) {
+                    playBeep();
+                    if (window.Notification && Notification.permission === "granted") {
+                        new Notification(`New DM from ${dm.sender}`, { body: dm.text });
+                    }
+                }
+            }
+        });
+
         chatForm.addEventListener('submit', (e) => {
             e.preventDefault();
             const text = messageInput.value;
@@ -143,10 +205,22 @@
             }
         });
 
-        // Helper function to append a message to the chat box
+        // Send Direct Message form handler
+        dmForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const text = dmInput.value.trim();
+            if (text && selectedDmUser) {
+                socket.emit('private_message', {
+                    sender: username,
+                    recipient: selectedDmUser,
+                    text: text
+                });
+                dmInput.value = '';
+            }
+        });
+
         function appendMessage(msg, isNew) {
             const messageElement = document.createElement('div');
-            
             const isMentioned = username && msg.text.includes(`@${username}`);
             if (isMentioned) {
                 messageElement.style.backgroundColor = '#ffff99';

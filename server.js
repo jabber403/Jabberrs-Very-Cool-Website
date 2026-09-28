@@ -15,12 +15,22 @@ const postHistory = [];
 const messageHistory = [];
 const MAX_HISTORY = 50;
 
+// Track connected users: socket.id -> username
+const connectedUsers = {};
+
 io.on('connection', (socket) => {
     console.log(`User connected: ${socket.id}`);
 
     socket.emit('init_history', { posts: postHistory, messages: messageHistory });
 
-    // Chat events
+    // Register user when they join chat
+    socket.on('register_user', (username) => {
+        if (!username) return;
+        connectedUsers[socket.id] = username.trim();
+        io.emit('update_user_list', Object.values(connectedUsers));
+    });
+
+    // Public chat events
     socket.on('chat_message', (data) => {
         const messageData = {
             id: Date.now() + Math.random(),
@@ -35,7 +45,30 @@ io.on('connection', (socket) => {
         io.emit('chat_message', messageData);
     });
 
-    // Post events
+    // Private Message (DM) events
+    socket.on('private_message', (data) => {
+        const recipientSocketId = Object.keys(connectedUsers).find(
+            key => connectedUsers[key] === data.recipient
+        );
+
+        const dmData = {
+            sender: data.sender,
+            recipient: data.recipient,
+            text: data.text ? data.text.trim() : '',
+            timestamp: new Date().toLocaleTimeString()
+        };
+
+        if (!dmData.text) return;
+
+        // Send to recipient if online
+        if (recipientSocketId) {
+            io.to(recipientSocketId).emit('private_message', dmData);
+        }
+        // Also send back to sender so it shows in their DM window
+        socket.emit('private_message', dmData);
+    });
+
+    // Post events (Keeping compatibility with posts page)
     socket.on('create_post', (data) => {
         const postData = {
             id: 'post_' + Date.now() + Math.random(),
@@ -55,7 +88,6 @@ io.on('connection', (socket) => {
         io.emit('new_post', postData);
     });
 
-    // Vote events (Like/Unlike & Dislike/Undislike)
     socket.on('vote_post', (data) => {
         const post = postHistory.find(p => p.id === data.postId);
         if (!post) return;
@@ -66,11 +98,9 @@ io.on('connection', (socket) => {
 
         if (data.type === 'like') {
             if (post.likedBy.includes(username)) {
-                // Unlike
                 post.likedBy = post.likedBy.filter(u => u !== username);
                 post.likes = Math.max(0, post.likes - 1);
             } else {
-                // Like
                 post.likedBy.push(username);
                 post.likes++;
                 if (post.dislikedBy.includes(username)) {
@@ -80,11 +110,9 @@ io.on('connection', (socket) => {
             }
         } else if (data.type === 'dislike') {
             if (post.dislikedBy.includes(username)) {
-                // Undislike
                 post.dislikedBy = post.dislikedBy.filter(u => u !== username);
                 post.dislikes = Math.max(0, post.dislikes - 1);
             } else {
-                // Dislike
                 post.dislikedBy.push(username);
                 post.dislikes++;
                 if (post.likedBy.includes(username)) {
@@ -96,7 +124,6 @@ io.on('connection', (socket) => {
         io.emit('update_post', post);
     });
 
-    // Comment events
     socket.on('add_comment', (data) => {
         const post = postHistory.find(p => p.id === data.postId);
         if (!post) return;
@@ -116,6 +143,8 @@ io.on('connection', (socket) => {
 
     socket.on('disconnect', () => {
         console.log(`User disconnected: ${socket.id}`);
+        delete connectedUsers[socket.id];
+        io.emit('update_user_list', Object.values(connectedUsers));
     });
 });
 
