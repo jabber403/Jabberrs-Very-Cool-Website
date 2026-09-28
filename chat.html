@@ -26,7 +26,8 @@
 
         <!-- Message Input Form -->
         <form id="chatForm">
-            <input type="text" id="messageInput" placeholder="Type a message..." autocomplete="off" autofocus required>
+            <input type="text" id="messageInput" placeholder="Type a message or use @username..." autocomplete="off" autofocus required>
+            <input type="file" id="fileInput">
             <button type="submit">Send</button>
         </form>
     </div>
@@ -45,8 +46,32 @@
         const chatBox = document.getElementById('chatBox');
         const chatForm = document.getElementById('chatForm');
         const messageInput = document.getElementById('messageInput');
+        const fileInput = document.getElementById('fileInput');
 
         let username = '';
+
+        // Request browser notification permissions on load
+        if (window.Notification && Notification.permission !== "granted") {
+            Notification.requestPermission();
+        }
+
+        // Simple audio beep generator using Web Audio API
+        function playBeep() {
+            try {
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
+                oscillator.type = 'sine';
+                oscillator.frequency.setValueAtTime(440, audioCtx.currentTime); // A4 note
+                gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                oscillator.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+                oscillator.start();
+                oscillator.stop(audioCtx.currentTime + 0.15);
+            } catch (e) {
+                // Audio context blocked before user interaction or not supported
+            }
+        }
 
         // Handle joining chat
         joinBtn.addEventListener('click', () => {
@@ -70,35 +95,82 @@
 
         // Receive past message history upon connection
         socket.on('init_history', (history) => {
-            history.forEach(msg => appendMessage(msg));
+            history.forEach(msg => appendMessage(msg, false));
         });
 
         // Receive new incoming messages
         socket.on('chat_message', (msg) => {
-            appendMessage(msg);
+            appendMessage(msg, true);
         });
 
-        // Handle sending messages
+        // Handle sending messages and files
         chatForm.addEventListener('submit', (e) => {
             e.preventDefault();
             const text = messageInput.value;
-            if (text.trim() && username) {
-                socket.emit('chat_message', { username: username, text: text });
+            const file = fileInput.files[0];
+
+            if (!text.trim() && !file) return;
+
+            if (file) {
+                // Read file as Base64 data URL to send over Socket.io
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    socket.emit('chat_message', {
+                        username: username,
+                        text: text,
+                        file: {
+                            name: file.name,
+                            type: file.type,
+                            data: event.target.result
+                        }
+                    });
+                    messageInput.value = '';
+                    fileInput.value = '';
+                };
+                reader.readAsDataURL(file);
+            } else {
+                socket.emit('chat_message', { username: username, text: text, file: null });
                 messageInput.value = '';
             }
         });
 
         // Helper function to append a message to the chat box
-        function appendMessage(msg) {
+        function appendMessage(msg, isNew) {
             const messageElement = document.createElement('div');
-            messageElement.innerHTML = `<strong>[${msg.timestamp}] ${escapeHTML(msg.username)}:</strong> ${escapeHTML(msg.text)}`;
+            
+            // Check if current user is mentioned using @username
+            const isMentioned = msg.text.includes(`@${username}`);
+            if (isMentioned) {
+                messageElement.style.backgroundColor = '#ffff99'; // Highlight yellow if mentioned
+            }
+
+            let contentHTML = `<strong>[${msg.timestamp}] ${escapeHTML(msg.username)}:</strong> ${escapeHTML(msg.text)}`;
+
+            // Render file if attached
+            if (msg.file) {
+                if (msg.file.type.startsWith('image/')) {
+                    contentHTML += `<br><img src="${msg.file.data}" alt="${escapeHTML(msg.file.name)}" style="max-width: 200px; display: block; margin-top: 5px;">`;
+                } else {
+                    contentHTML += `<br><a href="${msg.file.data}" download="${escapeHTML(msg.file.name)}">📎 Download ${escapeHTML(msg.file.name)}</a>`;
+                }
+            }
+
+            messageElement.innerHTML = contentHTML;
             chatBox.appendChild(messageElement);
-            // Auto-scroll to the bottom
             chatBox.scrollTop = chatBox.scrollHeight;
+
+            // Trigger audio and browser notifications for incoming messages from others
+            if (isNew && msg.username !== username) {
+                playBeep();
+                if (isMentioned && window.Notification && Notification.permission === "granted") {
+                    new Notification(`New mention from ${msg.username}`, { body: msg.text });
+                }
+            }
         }
 
         // Simple utility to prevent basic HTML injection
         function escapeHTML(str) {
+            if (!str) return '';
             return str.replace(/[&<>'"]/g, 
                 tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
             );
