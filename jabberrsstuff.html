@@ -59,7 +59,7 @@
 
         let username = localStorage.getItem('jabber_username') || '';
         let knownUsers = [];
-        let allPosts = []; // Track all loaded posts for searching
+        let allPosts = [];
 
         if (username) {
             displayUsername.textContent = username;
@@ -193,7 +193,6 @@
             postsFeed.innerHTML = '';
             const query = searchInput.value.toLowerCase();
 
-            // Filter posts based on search query matching text or username
             const filteredPosts = allPosts.filter(post => {
                 const textMatch = post.text && post.text.toLowerCase().includes(query);
                 const userMatch = post.username && post.username.toLowerCase().includes(query);
@@ -233,10 +232,6 @@
                     <p><strong>${escapeHTML(post.username)}</strong> posted at ${post.timestamp}</p>
                     <p>${escapeHTML(post.text)}</p>
                     ${mediaHTML}
-                    <br><br>
-                    <button onclick="votePost('${post.id}', 'like')">👍 Like (${post.likes})</button>
-                    <button onclick="votePost('${post.id}', 'dislike')">👎 Dislike (${post.dislikes})</button>
-                    
                     <hr>
                     <strong>Comments:</strong>
                     <div style="margin-top: 5px;">${commentsHTML || '<p><small>No comments yet.</small></p>'}</div>
@@ -247,11 +242,6 @@
                 </div>
             `;
         }
-
-        window.votePost = function(postId, type) {
-            if (!username) { alert('Please set your username first!'); return; }
-            socket.emit('vote_post', { postId, username, type });
-        };
 
         window.submitComment = function(e, postId) {
             e.preventDefault();
