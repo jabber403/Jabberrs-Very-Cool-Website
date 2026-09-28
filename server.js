@@ -18,7 +18,6 @@ const MAX_HISTORY = 50;
 io.on('connection', (socket) => {
     console.log(`User connected: ${socket.id}`);
 
-    // Send history depending on what loads
     socket.emit('init_history', { posts: postHistory, messages: messageHistory });
 
     // Chat events
@@ -56,23 +55,22 @@ io.on('connection', (socket) => {
         io.emit('new_post', postData);
     });
 
-    // Vote events (Handling Like/Unlike and Dislike/Undislike cleanly)
+    // Vote events (Like/Unlike & Dislike/Undislike)
     socket.on('vote_post', (data) => {
         const post = postHistory.find(p => p.id === data.postId);
         if (!post) return;
         const username = data.username;
 
-        // Ensure tracking arrays exist
         if (!post.likedBy) post.likedBy = [];
         if (!post.dislikedBy) post.dislikedBy = [];
 
         if (data.type === 'like') {
             if (post.likedBy.includes(username)) {
-                // UNLIKE: If already liked, remove like
+                // Unlike
                 post.likedBy = post.likedBy.filter(u => u !== username);
                 post.likes = Math.max(0, post.likes - 1);
             } else {
-                // LIKE: Add like, and remove from dislikes if they disliked it before
+                // Like
                 post.likedBy.push(username);
                 post.likes++;
                 if (post.dislikedBy.includes(username)) {
@@ -82,11 +80,11 @@ io.on('connection', (socket) => {
             }
         } else if (data.type === 'dislike') {
             if (post.dislikedBy.includes(username)) {
-                // UNDISLIKE: If already disliked, remove dislike
+                // Undislike
                 post.dislikedBy = post.dislikedBy.filter(u => u !== username);
                 post.dislikes = Math.max(0, post.dislikes - 1);
             } else {
-                // DISLIKE: Add dislike, and remove from likes if they liked it before
+                // Dislike
                 post.dislikedBy.push(username);
                 post.dislikes++;
                 if (post.likedBy.includes(username)) {
@@ -98,9 +96,12 @@ io.on('connection', (socket) => {
         io.emit('update_post', post);
     });
 
+    // Comment events
     socket.on('add_comment', (data) => {
         const post = postHistory.find(p => p.id === data.postId);
         if (!post) return;
+        if (!post.comments) post.comments = [];
+
         const commentData = {
             id: Date.now() + Math.random(),
             username: data.username ? data.username.trim() : 'Anonymous',
@@ -108,6 +109,7 @@ io.on('connection', (socket) => {
             timestamp: new Date().toLocaleTimeString()
         };
         if (!commentData.text) return;
+        
         post.comments.push(commentData);
         io.emit('update_post', post);
     });

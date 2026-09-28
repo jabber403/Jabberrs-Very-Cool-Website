@@ -141,9 +141,11 @@
             }
 
             let commentsHTML = '';
-            post.comments.forEach(c => {
-                commentsHTML += `<div style="margin-left: 15px; margin-top: 5px; border-left: 2px solid gray; padding-left: 5px;"><strong>${escapeHTML(c.username)}:</strong> ${escapeHTML(c.text)} <small>[${c.timestamp}]</small></div>`;
-            });
+            if (post.comments) {
+                post.comments.forEach(c => {
+                    commentsHTML += `<div style="margin-left: 15px; margin-top: 5px; border-left: 2px solid gray; padding-left: 5px;"><strong>${escapeHTML(c.username)}:</strong> ${escapeHTML(c.text)} <small>[${c.timestamp}]</small></div>`;
+                });
+            }
 
             return `
                 <div style="${highlightStyle}">
@@ -157,7 +159,7 @@
                     <hr>
                     <strong>Comments:</strong>
                     <div style="margin-top: 5px;">${commentsHTML || '<p><small>No comments yet.</small></p>'}</div>
-                    <form onsubmit="submitComment(event, '${post.id}')" style="margin-top: 5px;">
+                    <form onsubmit="submitComment(event, '${post.id}'); return false;" style="margin-top: 5px;">
                         <input type="text" placeholder="Write a comment..." required>
                         <button type="submit">Comment</button>
                     </form>
