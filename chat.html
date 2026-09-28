@@ -251,6 +251,7 @@
             }
         });
 
+        // Public Message Submit
         chatForm.addEventListener('submit', (e) => {
             e.preventDefault();
             const text = messageInput.value;
@@ -259,6 +260,8 @@
 
             if (!text.trim() && !file) return;
 
+            // Play sent sound for public message
+            sentSound.currentTime = 0;
             sentSound.play().catch(() => {});
 
             if (file) {
@@ -283,12 +286,16 @@
             }
         });
 
+        // Direct Message Submit
         dmForm.addEventListener('submit', (e) => {
             e.preventDefault();
             const text = dmInput.value.trim();
             dmAutocomplete.style.display = 'none';
             if (text && selectedDmUser) {
+                // Play sent sound for private message
+                sentSound.currentTime = 0;
                 sentSound.play().catch(() => {});
+
                 socket.emit('private_message', {
                     sender: username,
                     recipient: selectedDmUser,
