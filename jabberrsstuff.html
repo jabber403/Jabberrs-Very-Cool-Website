@@ -1,17 +1,289 @@
-<a href="index.html"><button>Back<--</button></a>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Jabberrs Stuff</title>
+</head>
+<body>
 
-<h1 style="font-family: 'Comic Sans MS', cursive, sans-serif;">Jabberrs Stuff:</h1>
+    <a href="index.html"><button>Back<--</button></a>
 
-<div>
-    <img src="bart.png">
-    <h1>a cool guy (Not Bart Jo-Jo Simpson)</h1>
-    <a href="https://drive.google.com/file/d/1qb9khg1jP_Cf5FGBlrEq34IZuImar_zO/view?usp=sharing"><button>Download?</button></a>
-</div>
+    <h1 style="font-family: 'Comic Sans MS', cursive, sans-serif;">Jabberrs Stuff:</h1>
 
-<div>
-<video src="haloce.mp4" controls width="400">
-            Your browser does not support the video tag.
-        </video>
-        <h2>a masterpiece of a game!!</h2>
-        <a href="https://drive.google.com/file/d/1synt0XtINBTTR1Jh5mgmwZ8qlvCNuh-Q/view?usp=sharing"><button>Download?</button></a>
-</div>
+    <!-- Username Section -->
+    <div id="login-section">
+        <label for="usernameInput">Enter your username:</label>
+        <input type="text" id="usernameInput" placeholder="Username...">
+        <button id="joinBtn">Join Platform</button>
+    </div>
+
+    <!-- Main Content Section (Hidden until username is set) -->
+    <div id="chat-section" style="display: none;">
+        <p>Logged in as: <strong id="displayUsername"></strong></p>
+        
+        <hr>
+
+        <!-- POSTS SECTION -->
+        <h2>Create a Post</h2>
+        <form id="postForm">
+            <textarea id="postInput" placeholder="What's on your mind? Use @username..." rows="3" cols="40" required></textarea><br>
+            <input type="file" id="postFileInput"><br>
+            <button type="submit">Publish Post</button>
+        </form>
+
+        <h2>Posts Feed</h2>
+        <div id="postsFeed"></div>
+
+        <hr>
+
+        <!-- LIVE CHAT SECTION -->
+        <h2>Live Chat Room</h2>
+        <div id="chatBox" style="border: 1px solid black; height: 300px; overflow-y: scroll; margin-bottom: 10px; padding: 5px;"></div>
+
+        <form id="chatForm">
+            <input type="text" id="messageInput" placeholder="Type a chat message or use @username..." autocomplete="off" required>
+            <input type="file" id="fileInput">
+            <button type="submit">Send Chat</button>
+        </form>
+    </div>
+
+    <!-- Include Socket.io Client Script -->
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+
+        const loginSection = document.getElementById('login-section');
+        const chatSection = document.getElementById('chat-section');
+        const usernameInput = document.getElementById('usernameInput');
+        const joinBtn = document.getElementById('joinBtn');
+        const displayUsername = document.getElementById('displayUsername');
+        
+        // Chat elements
+        const chatBox = document.getElementById('chatBox');
+        const chatForm = document.getElementById('chatForm');
+        const messageInput = document.getElementById('messageInput');
+        const fileInput = document.getElementById('fileInput');
+
+        // Post elements
+        const postForm = document.getElementById('postForm');
+        const postInput = document.getElementById('postInput');
+        const postFileInput = document.getElementById('postFileInput');
+        const postsFeed = document.getElementById('postsFeed');
+
+        let username = '';
+
+        // Request browser notification permissions on load
+        if (window.Notification && Notification.permission !== "granted") {
+            Notification.requestPermission();
+        }
+
+        // Simple audio beep generator using Web Audio API
+        function playBeep() {
+            try {
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
+                oscillator.type = 'sine';
+                oscillator.frequency.setValueAtTime(440, audioCtx.currentTime);
+                gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                oscillator.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+                oscillator.start();
+                oscillator.stop(audioCtx.currentTime + 0.15);
+            } catch (e) {}
+        }
+
+        // Handle joining platform
+        joinBtn.addEventListener('click', () => {
+            const name = usernameInput.value.trim();
+            if (name) {
+                username = name;
+                displayUsername.textContent = username;
+                loginSection.style.display = 'none';
+                chatSection.style.display = 'block';
+            } else {
+                alert('Please enter a valid username.');
+            }
+        });
+
+        usernameInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') joinBtn.click();
+        });
+
+        // Initialize history (Posts & Messages)
+        socket.on('init_history', (data) => {
+            postsFeed.innerHTML = '';
+            data.posts.forEach(post => renderPost(post, false));
+            data.messages.forEach(msg => appendMessage(msg, false));
+        });
+
+        // Receive real-time chat messages
+        socket.on('chat_message', (msg) => {
+            appendMessage(msg, true);
+        });
+
+        // Receive new posts
+        socket.on('new_post', (post) => {
+            renderPost(post, true);
+        });
+
+        // Update existing posts (likes/dislikes/comments)
+        socket.on('update_post', (updatedPost) => {
+            const existingElement = document.getElementById(updatedPost.id);
+            if (existingElement) {
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = buildPostHTML(updatedPost);
+                existingElement.replaceWith(tempDiv.firstElementChild);
+            }
+        });
+
+        // Handle sending chat messages
+        chatForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const text = messageInput.value;
+            const file = fileInput.files[0];
+
+            if (!text.trim() && !file) return;
+
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    socket.emit('chat_message', { username, text, file: { name: file.name, type: file.type, data: event.target.result } });
+                    messageInput.value = '';
+                    fileInput.value = '';
+                };
+                reader.readAsDataURL(file);
+            } else {
+                socket.emit('chat_message', { username, text, file: null });
+                messageInput.value = '';
+            }
+        });
+
+        // Handle creating posts
+        postForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const text = postInput.value;
+            const file = postFileInput.files[0];
+
+            if (!text.trim() && !file) return;
+
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    socket.emit('create_post', { username, text, file: { name: file.name, type: file.type, data: event.target.result } });
+                    postInput.value = '';
+                    postFileInput.value = '';
+                };
+                reader.readAsDataURL(file);
+            } else {
+                socket.emit('create_post', { username, text, file: null });
+                postInput.value = '';
+            }
+        });
+
+        // Append chat message
+        function appendMessage(msg, isNew) {
+            const messageElement = document.createElement('div');
+            const isMentioned = msg.text.includes(`@${username}`);
+            if (isMentioned) messageElement.style.backgroundColor = '#ffff99';
+
+            let contentHTML = `<strong>[${msg.timestamp}] ${escapeHTML(msg.username)}:</strong> ${escapeHTML(msg.text)}`;
+            if (msg.file) {
+                if (msg.file.type.startsWith('image/')) {
+                    contentHTML += `<br><img src="${msg.file.data}" alt="${escapeHTML(msg.file.name)}" style="max-width: 200px; display: block; margin-top: 5px;">`;
+                } else {
+                    contentHTML += `<br><a href="${msg.file.data}" download="${escapeHTML(msg.file.name)}">📎 Download ${escapeHTML(msg.file.name)}</a>`;
+                }
+            }
+
+            messageElement.innerHTML = contentHTML;
+            chatBox.appendChild(messageElement);
+            chatBox.scrollTop = chatBox.scrollHeight;
+
+            if (isNew && msg.username !== username) {
+                playBeep();
+                if (isMentioned && window.Notification && Notification.permission === "granted") {
+                    new Notification(`New mention from ${msg.username}`, { body: msg.text });
+                }
+            }
+        }
+
+        // Render posts feed element
+        function renderPost(post, isNew) {
+            const postWrapper = document.createElement('div');
+            postWrapper.id = post.id;
+            postWrapper.innerHTML = buildPostHTML(post);
+            postsFeed.prepend(postWrapper); // Newest posts on top
+
+            const isMentioned = post.text.includes(`@${username}`);
+            if (isNew && post.username !== username) {
+                playBeep();
+                if (isMentioned && window.Notification && Notification.permission === "granted") {
+                    new Notification(`New post mention from ${post.username}`, { body: post.text });
+                }
+            }
+        }
+
+        // Build HTML template for a single post
+        function buildPostHTML(post) {
+            const isMentioned = post.text.includes(`@${username}`);
+            let highlightStyle = isMentioned ? 'background-color: #ffff99; border: 1px solid orange; padding: 10px; margin-bottom: 10px;' : 'border: 1px solid black; padding: 10px; margin-bottom: 10px;';
+
+            let mediaHTML = '';
+            if (post.file) {
+                if (post.file.type.startsWith('image/')) {
+                    mediaHTML = `<br><img src="${post.file.data}" alt="${escapeHTML(post.file.name)}" style="max-width: 300px; display: block; margin-top: 5px;">`;
+                } else {
+                    mediaHTML = `<br><a href="${post.file.data}" download="${escapeHTML(post.file.name)}">📎 Download ${escapeHTML(post.file.name)}</a>`;
+                }
+            }
+
+            let commentsHTML = '';
+            post.comments.forEach(c => {
+                commentsHTML += `<div style="margin-left: 15px; margin-top: 5px; border-left: 2px solid gray; padding-left: 5px;"><strong>${escapeHTML(c.username)}:</strong> ${escapeHTML(c.text)} <small>[${c.timestamp}]</small></div>`;
+            });
+
+            return `
+                <div style="${highlightStyle}">
+                    <p><strong>${escapeHTML(post.username)}</strong> posted at ${post.timestamp}</p>
+                    <p>${escapeHTML(post.text)}</p>
+                    ${mediaHTML}
+                    <br><br>
+                    <button onclick="votePost('${post.id}', 'like')">👍 Like (${post.likes})</button>
+                    <button onclick="votePost('${post.id}', 'dislink' || 'dislike')">👎 Dislike (${post.dislikes})</button>
+                    
+                    <hr>
+                    <strong>Comments:</strong>
+                    <div style="margin-top: 5px;">${commentsHTML || '<p><small>No comments yet.</small></p>'}</div>
+                    <form onsubmit="submitComment(event, '${post.id}')" style="margin-top: 5px;">
+                        <input type="text" placeholder="Write a comment..." required>
+                        <button type="submit">Comment</button>
+                    </form>
+                </div>
+            `;
+        }
+
+        // Helper functions for post interactions triggered from inline handlers
+        window.votePost = function(postId, type) {
+            socket.emit('vote_post', { postId, username, type });
+        };
+
+        window.submitComment = function(e, postId) {
+            e.preventDefault();
+            const input = e.target.querySelector('input');
+            const text = input.value.trim();
+            if (text) {
+                socket.emit('add_comment', { postId, username, text });
+                input.value = '';
+            }
+        };
+
+        function escapeHTML(str) {
+            if (!str) return '';
+            return str.replace(/[&<>'"]/g, 
+                tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
+            );
+        }
+    </script>
+</body>
+</html>
