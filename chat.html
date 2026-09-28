@@ -12,7 +12,7 @@
 
     <!-- Username Section -->
     <div id="login-section">
-        <label for="usernameInput">Enter your username:</label>
+        <label for="usernameInput">Enter your username (no spaces):</label>
         <input type="text" id="usernameInput" placeholder="Username...">
         <button id="joinBtn">Join Chat</button>
     </div>
@@ -32,14 +32,15 @@
         <!-- PUBLIC CHAT CONTAINER -->
         <div id="publicChatContainer">
             <h2>Public Chat Room</h2>
-            <!-- Messages Container -->
             <div id="chatBox" style="border: 1px solid black; height: 250px; overflow-y: scroll; margin-bottom: 10px; padding: 5px;"></div>
 
-            <!-- Message Input Form -->
-            <form id="chatForm">
-                <input type="text" id="messageInput" placeholder="Type a public message or use @username..." autocomplete="off" required>
+            <!-- Message Input Form with Autocomplete Container -->
+            <form id="chatForm" style="position: relative;">
+                <input type="text" id="messageInput" placeholder="Type a public message or use @username..." autocomplete="off" required style="width: 300px;">
                 <input type="file" id="fileInput">
                 <button type="submit">Send Public</button>
+                <!-- Autocomplete Dropdown -->
+                <div id="chatAutocomplete" style="border: 1px solid black; background: white; position: absolute; display: none; max-height: 100px; overflow-y: auto; width: 300px;"></div>
             </form>
         </div>
 
@@ -47,7 +48,6 @@
         <div id="dmContainer" style="display: none;">
             <h2>Direct Messages</h2>
             
-            <!-- Online Users List for DMs -->
             <div>
                 <strong>Online Users:</strong>
                 <ul id="onlineUsersList"></ul>
@@ -58,9 +58,11 @@
             <p>Currently messaging: <strong id="currentDmTarget">Select a user from above</strong></p>
             <div id="dmBox" style="border: 1px solid black; height: 200px; overflow-y: scroll; margin-bottom: 10px; padding: 5px;"></div>
 
-            <form id="dmForm">
-                <input type="text" id="dmInput" placeholder="Type a private message..." autocomplete="off" required>
+            <form id="dmForm" style="position: relative;">
+                <input type="text" id="dmInput" placeholder="Type a private message or use @username..." autocomplete="off" required style="width: 300px;">
                 <button type="submit" id="sendDmBtn" disabled>Send DM</button>
+                <!-- DM Autocomplete Dropdown -->
+                <div id="dmAutocomplete" style="border: 1px solid black; background: white; position: absolute; display: none; max-height: 100px; overflow-y: auto; width: 300px;"></div>
             </form>
         </div>
     </div>
@@ -77,7 +79,6 @@
         const displayUsername = document.getElementById('displayUsername');
         const changeNameBtn = document.getElementById('changeNameBtn');
         
-        // View containers and buttons
         const publicChatContainer = document.getElementById('publicChatContainer');
         const dmContainer = document.getElementById('dmContainer');
         const publicChatViewBtn = document.getElementById('publicChatViewBtn');
@@ -88,15 +89,18 @@
         const chatForm = document.getElementById('chatForm');
         const messageInput = document.getElementById('messageInput');
         const fileInput = document.getElementById('fileInput');
+        const chatAutocomplete = document.getElementById('chatAutocomplete');
 
         const dmBox = document.getElementById('dmBox');
         const dmForm = document.getElementById('dmForm');
         const dmInput = document.getElementById('dmInput');
         const sendDmBtn = document.getElementById('sendDmBtn');
         const currentDmTarget = document.getElementById('currentDmTarget');
+        const dmAutocomplete = document.getElementById('dmAutocomplete');
 
         let username = localStorage.getItem('jabber_username') || '';
         let selectedDmUser = '';
+        let knownUsers = [];
 
         if (username) {
             displayUsername.textContent = username;
@@ -124,7 +128,16 @@
             } catch (e) {}
         }
 
-        // Toggle Views
+        // Prevent spaces in main username input fields
+        usernameInput.addEventListener('keydown', (e) => {
+            if (e.key === 'App' || e.key === ' ') {
+                e.preventDefault();
+            }
+        });
+        usernameInput.addEventListener('input', (e) => {
+            usernameInput.value = usernameInput.value.replace(/\s+/g, '');
+        });
+
         publicChatViewBtn.addEventListener('click', () => {
             publicChatContainer.style.display = 'block';
             dmContainer.style.display = 'none';
@@ -160,6 +173,7 @@
         });
 
         socket.on('update_user_list', (users) => {
+            knownUsers = users;
             onlineUsersList.innerHTML = '';
             users.forEach(user => {
                 if (user !== username) {
@@ -176,6 +190,52 @@
             sendDmBtn.disabled = false;
             dmBox.innerHTML += `<p><small>--- Started DM conversation with ${escapeHTML(targetUser)} ---</small></p>`;
         };
+
+        // Generic Autocomplete Handler for @ mentions
+        function setupAutocomplete(inputField, dropdownDiv, isChat) {
+            inputField.addEventListener('input', () => {
+                const val = inputField.value;
+                const cursorPos = inputField.selectionStart;
+                const textBeforeCursor = val.substring(0, cursorPos);
+                const lastAtIndex = textBeforeCursor.lastIndexOf('@');
+
+                if (lastAtIndex !== -1) {
+                    const query = textBeforeCursor.substring(lastAtIndex + 1);
+                    // If there is a space after @query, stop filtering
+                    if (!query.includes(' ')) {
+                        const filtered = knownUsers.filter(u => u.toLowerCase().startsWith(query.toLowerCase()));
+                        if (filtered.length > 0) {
+                            dropdownDiv.innerHTML = '';
+                            filtered.forEach(user => {
+                                const div = document.createElement('div');
+                                div.style.padding = '3px';
+                                div.style.cursor = 'pointer';
+                                div.textContent = '@' + user;
+                                div.addEventListener('mousedown', (e) => {
+                                    e.preventDefault(); // Prevent input blur
+                                    const beforeAt = val.substring(0, lastAtIndex);
+                                    const afterCursor = val.substring(cursorPos);
+                                    inputField.value = beforeAt + '@' + user + ' ' + afterCursor;
+                                    dropdownDiv.style.display = 'none';
+                                    inputField.focus();
+                                });
+                                dropdownDiv.appendChild(div);
+                            });
+                            dropdownDiv.style.display = 'block';
+                            return;
+                        }
+                    }
+                }
+                dropdownDiv.style.display = 'none';
+            });
+
+            inputField.addEventListener('blur', () => {
+                setTimeout(() => { dropdownDiv.style.display = 'none'; }, 200);
+            });
+        }
+
+        setupAutocomplete(messageInput, chatAutocomplete, true);
+        setupAutocomplete(dmInput, dmAutocomplete, false);
 
         socket.on('init_history', (data) => {
             chatBox.innerHTML = '';
@@ -206,6 +266,7 @@
             e.preventDefault();
             const text = messageInput.value;
             const file = fileInput.files[0];
+            chatAutocomplete.style.display = 'none';
 
             if (!text.trim() && !file) return;
 
@@ -234,6 +295,7 @@
         dmForm.addEventListener('submit', (e) => {
             e.preventDefault();
             const text = dmInput.value.trim();
+            dmAutocomplete.style.display = 'none';
             if (text && selectedDmUser) {
                 socket.emit('private_message', {
                     sender: username,
