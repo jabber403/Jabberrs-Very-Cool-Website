@@ -15,7 +15,6 @@ const postHistory = [];
 const messageHistory = [];
 const MAX_HISTORY = 50;
 
-// Track connected users: socket.id -> username
 const connectedUsers = {};
 
 io.on('connection', (socket) => {
@@ -23,17 +22,29 @@ io.on('connection', (socket) => {
 
     socket.emit('init_history', { posts: postHistory, messages: messageHistory });
 
-    // Register user when they join chat
     socket.on('register_user', (username) => {
         if (!username) return;
-        connectedUsers[socket.id] = username.trim();
+        const trimmedName = username.trim();
+        connectedUsers[socket.id] = trimmedName;
+        
+        // Broadcast user joined
+        const joinMsg = {
+            id: Date.now() + Math.random(),
+            type: 'system',
+            text: `${trimmedName} has joined the chat.`,
+            timestamp: new Date().toLocaleTimeString()
+        };
+        messageHistory.push(joinMsg);
+        if (messageHistory.length > MAX_HISTORY) messageHistory.shift();
+        io.emit('chat_message', joinMsg);
+
         io.emit('update_user_list', Object.values(connectedUsers));
     });
 
-    // Public chat events
     socket.on('chat_message', (data) => {
         const messageData = {
             id: Date.now() + Math.random(),
+            type: 'user',
             username: data.username ? data.username.trim() : 'Anonymous',
             text: data.text ? data.text.trim() : '',
             file: data.file || null,
@@ -45,7 +56,6 @@ io.on('connection', (socket) => {
         io.emit('chat_message', messageData);
     });
 
-    // Private Message (DM) events
     socket.on('private_message', (data) => {
         const recipientSocketId = Object.keys(connectedUsers).find(
             key => connectedUsers[key] === data.recipient
@@ -60,15 +70,12 @@ io.on('connection', (socket) => {
 
         if (!dmData.text) return;
 
-        // Send to recipient if online
         if (recipientSocketId) {
             io.to(recipientSocketId).emit('private_message', dmData);
         }
-        // Also send back to sender so it shows in their DM window
         socket.emit('private_message', dmData);
     });
 
-    // Post events (Keeping compatibility with posts page)
     socket.on('create_post', (data) => {
         const postData = {
             id: 'post_' + Date.now() + Math.random(),
@@ -142,9 +149,21 @@ io.on('connection', (socket) => {
     });
 
     socket.on('disconnect', () => {
+        const leftName = connectedUsers[socket.id];
+        if (leftName) {
+            delete connectedUsers[socket.id];
+            const leaveMsg = {
+                id: Date.now() + Math.random(),
+                type: 'system',
+                text: `${leftName} has left the chat.`,
+                timestamp: new Date().toLocaleTimeString()
+            };
+            messageHistory.push(leaveMsg);
+            if (messageHistory.length > MAX_HISTORY) messageHistory.shift();
+            io.emit('chat_message', leaveMsg);
+            io.emit('update_user_list', Object.values(connectedUsers));
+        }
         console.log(`User disconnected: ${socket.id}`);
-        delete connectedUsers[socket.id];
-        io.emit('update_user_list', Object.values(connectedUsers));
     });
 });
 

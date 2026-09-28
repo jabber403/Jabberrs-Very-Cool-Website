@@ -6,6 +6,12 @@
 </head>
 <body>
 
+    <!-- Audio Elements for Sound Effects -->
+    <audio id="joinedSound" src="Joined.mp3" preload="auto"></audio>
+    <audio id="leftSound" src="Left.mp3" preload="auto"></audio>
+    <audio id="messageSound" src="Message.mp3" preload="auto"></audio>
+    <audio id="sentSound" src="Sent.mp3" preload="auto"></audio>
+
     <a href="index.html"><button>Back<--</button></a>
 
     <h1>Jabberrs Awesome Chat App!!</h1>
@@ -39,7 +45,6 @@
                 <input type="text" id="messageInput" placeholder="Type a public message or use @username..." autocomplete="off" required style="width: 300px;">
                 <input type="file" id="fileInput">
                 <button type="submit">Send Public</button>
-                <!-- Autocomplete Dropdown -->
                 <div id="chatAutocomplete" style="border: 1px solid black; background: white; position: absolute; display: none; max-height: 100px; overflow-y: auto; width: 300px;"></div>
             </form>
         </div>
@@ -61,13 +66,11 @@
             <form id="dmForm" style="position: relative;">
                 <input type="text" id="dmInput" placeholder="Type a private message or use @username..." autocomplete="off" required style="width: 300px;">
                 <button type="submit" id="sendDmBtn" disabled>Send DM</button>
-                <!-- DM Autocomplete Dropdown -->
                 <div id="dmAutocomplete" style="border: 1px solid black; background: white; position: absolute; display: none; max-height: 100px; overflow-y: auto; width: 300px;"></div>
             </form>
         </div>
     </div>
 
-    <!-- Include Socket.io Client Script -->
     <script src="/socket.io/socket.io.js"></script>
     <script>
         const socket = io();
@@ -98,6 +101,12 @@
         const currentDmTarget = document.getElementById('currentDmTarget');
         const dmAutocomplete = document.getElementById('dmAutocomplete');
 
+        // Sound Elements
+        const joinedSound = document.getElementById('joinedSound');
+        const leftSound = document.getElementById('leftSound');
+        const messageSound = document.getElementById('messageSound');
+        const sentSound = document.getElementById('sentSound');
+
         let username = localStorage.getItem('jabber_username') || '';
         let selectedDmUser = '';
         let knownUsers = [];
@@ -113,28 +122,10 @@
             Notification.requestPermission();
         }
 
-        function playBeep() {
-            try {
-                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                const oscillator = audioCtx.createOscillator();
-                const gainNode = audioCtx.createGain();
-                oscillator.type = 'sine';
-                oscillator.frequency.setValueAtTime(440, audioCtx.currentTime);
-                gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
-                oscillator.connect(gainNode);
-                gainNode.connect(audioCtx.destination);
-                oscillator.start();
-                oscillator.stop(audioCtx.currentTime + 0.15);
-            } catch (e) {}
-        }
-
-        // Prevent spaces in main username input fields
         usernameInput.addEventListener('keydown', (e) => {
-            if (e.key === 'App' || e.key === ' ') {
-                e.preventDefault();
-            }
+            if (e.key === ' ') e.preventDefault();
         });
-        usernameInput.addEventListener('input', (e) => {
+        usernameInput.addEventListener('input', () => {
             usernameInput.value = usernameInput.value.replace(/\s+/g, '');
         });
 
@@ -191,8 +182,7 @@
             dmBox.innerHTML += `<p><small>--- Started DM conversation with ${escapeHTML(targetUser)} ---</small></p>`;
         };
 
-        // Generic Autocomplete Handler for @ mentions
-        function setupAutocomplete(inputField, dropdownDiv, isChat) {
+        function setupAutocomplete(inputField, dropdownDiv) {
             inputField.addEventListener('input', () => {
                 const val = inputField.value;
                 const cursorPos = inputField.selectionStart;
@@ -201,7 +191,6 @@
 
                 if (lastAtIndex !== -1) {
                     const query = textBeforeCursor.substring(lastAtIndex + 1);
-                    // If there is a space after @query, stop filtering
                     if (!query.includes(' ')) {
                         const filtered = knownUsers.filter(u => u.toLowerCase().startsWith(query.toLowerCase()));
                         if (filtered.length > 0) {
@@ -212,7 +201,7 @@
                                 div.style.cursor = 'pointer';
                                 div.textContent = '@' + user;
                                 div.addEventListener('mousedown', (e) => {
-                                    e.preventDefault(); // Prevent input blur
+                                    e.preventDefault();
                                     const beforeAt = val.substring(0, lastAtIndex);
                                     const afterCursor = val.substring(cursorPos);
                                     inputField.value = beforeAt + '@' + user + ' ' + afterCursor;
@@ -234,8 +223,8 @@
             });
         }
 
-        setupAutocomplete(messageInput, chatAutocomplete, true);
-        setupAutocomplete(dmInput, dmAutocomplete, false);
+        setupAutocomplete(messageInput, chatAutocomplete);
+        setupAutocomplete(dmInput, dmAutocomplete);
 
         socket.on('init_history', (data) => {
             chatBox.innerHTML = '';
@@ -254,7 +243,7 @@
                 dmBox.scrollTop = dmBox.scrollHeight;
 
                 if (dm.sender !== username) {
-                    playBeep();
+                    messageSound.play().catch(() => {});
                     if (window.Notification && Notification.permission === "granted") {
                         new Notification(`New DM from ${dm.sender}`, { body: dm.text });
                     }
@@ -269,6 +258,8 @@
             chatAutocomplete.style.display = 'none';
 
             if (!text.trim() && !file) return;
+
+            sentSound.play().catch(() => {});
 
             if (file) {
                 const reader = new FileReader();
@@ -297,6 +288,7 @@
             const text = dmInput.value.trim();
             dmAutocomplete.style.display = 'none';
             if (text && selectedDmUser) {
+                sentSound.play().catch(() => {});
                 socket.emit('private_message', {
                     sender: username,
                     recipient: selectedDmUser,
@@ -308,6 +300,24 @@
 
         function appendMessage(msg, isNew) {
             const messageElement = document.createElement('div');
+            
+            if (msg.type === 'system') {
+                messageElement.style.fontStyle = 'italic';
+                messageElement.style.color = 'gray';
+                messageElement.innerHTML = `<em>[${msg.timestamp}] ${escapeHTML(msg.text)}</em>`;
+                chatBox.appendChild(messageElement);
+                chatBox.scrollTop = chatBox.scrollHeight;
+
+                if (isNew) {
+                    if (msg.text.includes('joined')) {
+                        joinedSound.play().catch(() => {});
+                    } else if (msg.text.includes('left')) {
+                        leftSound.play().catch(() => {});
+                    }
+                }
+                return;
+            }
+
             const isMentioned = username && msg.text.includes(`@${username}`);
             if (isMentioned) {
                 messageElement.style.backgroundColor = '#ffff99';
@@ -328,7 +338,7 @@
             chatBox.scrollTop = chatBox.scrollHeight;
 
             if (isNew && msg.username !== username) {
-                playBeep();
+                messageSound.play().catch(() => {});
                 if (isMentioned && window.Notification && Notification.permission === "granted") {
                     new Notification(`New mention from ${msg.username}`, { body: msg.text });
                 }
