@@ -1,61 +1,98 @@
-<h1>Welcome to Jabberrs Very Cool Website!!</h1>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Jabberrs Very Cool Website</title>
+</head>
+<body>
 
-<a href="loginandsignup.html"><button>Login</button></a>
+    <!-- Top Right Header for Auth State -->
+    <div id="authHeader" style="position: absolute; top: 10px; right: 10px; text-align: right;">
+        <span id="userInfo" style="display: none; margin-right: 10px;">Logged in as: <strong id="displayUsername"></strong></span>
+        <button id="logoutBtn" style="display: none;" onclick="logout()">Log Out</button>
+        <a href="loginandsignup.html" id="loginLink"><button>Login</button></a>
+    </div>
 
-<title>Jabberrs Very Cool Website</title>
+    <h1>Welcome to Jabberrs Very Cool Website!!</h1>
 
-<a href="./meetjabberr.html"><button>Meet Jabberr</button></a>
+    <a href="./meetjabberr.html"><button>Meet Jabberr</button></a>
 
-<a href="https://www.venmo.com/u/Jabberrr"><button>Donate?!</button></a>
+    <a href="https://www.venmo.com/u/Jabberrr"><button>Donate?!</button></a>
 
-<h2>Chat!!</h2>
-<div>
-    <a href="chat.html"><button>Jabberrs Awesome Chat App</button></a>
-</div>
+    <h2>Chat!!</h2>
+    <div>
+        <a href="chat.html"><button>Jabberrs Awesome Chat App</button></a>
+    </div>
 
-<h3>info:</h3>
-<div>
-    <p>Jabberrs Very Cool Website is made by Jabberr AND Your Average Softmodder thankssss. THIS IS A PURE HTML WEBSITE!!!</p>
-</div>
+    <h3>info:</h3>
+    <div>
+        <p>Jabberrs Very Cool Website is made by Jabberr AND Your Average Softmodder thankssss. THIS IS A PURE HTML WEBSITE!!!</p>
+    </div>
 
-<h2>Other websites:</h2>
-<div>
-    <a href="https://bliinks.net"><button>Bliinks Network</button></a>
-</div>
+    <h2>Other websites:</h2>
+    <div>
+        <a href="https://bliinks.net"><button>Bliinks Network</button></a>
+    </div>
 
-<h2>Post:</h2>
-<div>
-    <a href="./jabberrsstuff.html"><button>Jabberrs Amazing Posting Platform</button></a>
-</div>
+    <h2>Post:</h2>
+    <div>
+        <a href="./jabberrsstuff.html"><button>Jabberrs Amazing Posting Platform</button></a>
+    </div>
 
-<h2>News:</h2>
-<div>
-    <p>WE ADDED A CHATING FEATURE AND WE ADDED A POSTING FEATURE AND ADDED DMS!!!</p>
-</div>
+    <h2>News:</h2>
+    <div>
+        <p>WE ADDED A CHATING FEATURE AND WE ADDED A POSTING FEATURE AND ADDED DMS AND WE ADDED LOGIN AND SIGN UP FEATURE!!!</p>
+    </div>
 
-<h1>Jabberrs Socials:</h1>
-<div>
-    <a href="https://www.youtube.com/@RetroJabberr"><button>Jabberrs YouTube (Retro Jabberr)</button></a>
-    <a href="https://github.com/jabber403"><button>Jabberrs GitHub</button></a>
-</div>
+    <h1>Jabberrs Socials:</h1>
+    <div>
+        <a href="https://www.youtube.com/@RetroJabberr"><button>Jabberrs YouTube (Retro Jabberr)</button></a>
+        <a href="https://github.com/jabber403"><button>Jabberrs GitHub</button></a>
+    </div>
 
-<h2 style="font-family: 'Comic Sans MS', sans-serif;">Developers!!</h2>
-<div>
-    <h3>Jabberr and Your Average Softmodder</h3>
-</div>
+    <h2 style="font-family: 'Comic Sans MS', sans-serif;">Developers!!</h2>
+    <div>
+        <h3>Jabberr and Your Average Softmodder</h3>
+    </div>
 
-<h1>Your Average Softmodder socials</h1>
-<div>
-    <a href="https://github.com/notgonnaposta"><button>Your Average Softmodders GitHub</button></a>
-    <a href="https://www.youtube.com/channel/UCOdedyUXxIfNnCXfkeNgxkg"><button>Your Average Softmodders YouTube</button></a>
-    <a href="https://www.reddit.com/user/HouseholdFly/"><button>Your Average Softmodders Reddit</button></a>
-    <a href="https://steamcommunity.com/profiles/76561199065622082"><button>Your Average Softmodders Steam</button></a>
-    <a href="https://discord.com/users/1022902169516638238"><button>Your Average Softmodders Discord</button></a>
-</div>
+    <h1>Your Average Softmodder socials</h1>
+    <div>
+        <a href="https://github.com/notgonnaposta"><button>Your Average Softmodders GitHub</button></a>
+        <a href="https://www.youtube.com/channel/UCOdedyUXxIfNnCXfkeNgxkg"><button>Your Average Softmodders YouTube</button></a>
+        <a href="https://www.reddit.com/user/HouseholdFly/"><button>Your Average Softmodders Reddit</button></a>
+        <a href="https://steamcommunity.com/profiles/76561199065622082"><button>Your Average Softmodders Steam</button></a>
+        <a href="https://discord.com/users/1022902169516638238"><button>Your Average Softmodders Discord</button></a>
+    </div>
 
-<h2>Music:</h2>
-<div>
-    <a href="./music.html"><button>Music</button></a>
-</div>
+    <h2>Music:</h2>
+    <div>
+        <a href="./music.html"><button>Music</button></a>
+    </div>
 
-<h6>Not Copyrighted 2026 Jabberrs_Not_Gay.co</h6>
+    <h6>Not Copyrighted 2026 Jabberrs_Not_Gay.co</h6>
+
+    <script>
+        const username = localStorage.getItem('jabber_username');
+        const userInfo = document.getElementById('userInfo');
+        const displayUsername = document.getElementById('displayUsername');
+        const logoutBtn = document.getElementById('logoutBtn');
+        const loginLink = document.getElementById('loginLink');
+
+        if (username) {
+            displayUsername.textContent = username;
+            userInfo.style.display = 'inline';
+            logoutBtn.style.display = 'inline-block';
+            loginLink.style.display = 'none';
+        } else {
+            userInfo.style.display = 'none';
+            logoutBtn.style.display = 'none';
+            loginLink.style.display = 'inline';
+        }
+
+        function logout() {
+            localStorage.removeItem('jabber_username');
+            window.location.reload();
+        }
+    </script>
+</body>
+</html>
