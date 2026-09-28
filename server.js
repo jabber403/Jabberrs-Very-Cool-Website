@@ -2,20 +2,69 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
+const fs = require('fs');
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-    maxHttpBufferSize: 10 * 1024 * 1024 // 10MB file upload limit
+    maxHttpBufferSize: 10 * 1024 * 1024 // 10MB upload limit
 });
 
 app.use(express.static(path.join(__dirname)));
+app.use(express.json());
+
+const USERS_FILE = path.join(__dirname, 'users.json');
+
+// Helper functions for user storage
+function loadUsers() {
+    if (!fs.existsSync(USERS_FILE)) return {};
+    try {
+        return JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
+    } catch (e) {
+        return {};
+    }
+}
+
+function saveUsers(users) {
+    fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
+}
+
+// REST endpoints for Login and Signup
+app.post('/api/signup', (req, res) => {
+    const { username, password } = req.body;
+    if (!username || !password) {
+        return res.json({ success: false, message: 'Username and password required.' });
+    }
+    const trimmed = username.trim();
+    const users = loadUsers();
+    if (users[trimmed]) {
+        return res.json({ success: false, message: 'Username already exists.' });
+    }
+    users[trimmed] = {
+        password: password, // In production, hash this!
+        following: []
+    };
+    saveUsers(users);
+    return res.json({ success: true, username: trimmed });
+});
+
+app.post('/api/login', (req, res) => {
+    const { username, password } = req.body;
+    if (!username || !password) {
+        return res.json({ success: false, message: 'Username and password required.' });
+    }
+    const trimmed = username.trim();
+    const users = loadUsers();
+    if (!users[trimmed] || users[trimmed].password !== password) {
+        return res.json({ success: false, message: 'Invalid username or password.' });
+    }
+    return res.json({ success: true, username: trimmed });
+});
 
 const postHistory = [];
 const messageHistory = [];
 const MAX_HISTORY = 50;
-
-const connectedUsers = {};
+const connectedUsers = {}; // socket.id -> username
 
 io.on('connection', (socket) => {
     console.log(`User connected: ${socket.id}`);
@@ -26,8 +75,8 @@ io.on('connection', (socket) => {
         if (!username) return;
         const trimmedName = username.trim();
         connectedUsers[socket.id] = trimmedName;
-        
-        // Broadcast user joined
+
+        // Broadcast join system message
         const joinMsg = {
             id: Date.now() + Math.random(),
             type: 'system',
@@ -39,8 +88,10 @@ io.on('connection', (socket) => {
         io.emit('chat_message', joinMsg);
 
         io.emit('update_user_list', Object.values(connectedUsers));
+        sendUserData(socket, trimmedName);
     });
 
+    // Chat handling
     socket.on('chat_message', (data) => {
         const messageData = {
             id: Date.now() + Math.random(),
@@ -60,28 +111,27 @@ io.on('connection', (socket) => {
         const recipientSocketId = Object.keys(connectedUsers).find(
             key => connectedUsers[key] === data.recipient
         );
-
         const dmData = {
             sender: data.sender,
             recipient: data.recipient,
             text: data.text ? data.text.trim() : '',
             timestamp: new Date().toLocaleTimeString()
         };
-
         if (!dmData.text) return;
-
         if (recipientSocketId) {
             io.to(recipientSocketId).emit('private_message', dmData);
         }
         socket.emit('private_message', dmData);
     });
 
+    // Posts & Social Features
     socket.on('create_post', (data) => {
         const postData = {
             id: 'post_' + Date.now() + Math.random(),
             username: data.username ? data.username.trim() : 'Anonymous',
             text: data.text ? data.text.trim() : '',
             file: data.file || null,
+            shares: 0,
             likes: 0,
             dislikes: 0,
             likedBy: [],
@@ -95,11 +145,17 @@ io.on('connection', (socket) => {
         io.emit('new_post', postData);
     });
 
+    socket.on('share_post', (data) => {
+        const post = postHistory.find(p => p.id === data.postId);
+        if (!post) return;
+        post.shares = (post.shares || 0) + 1;
+        io.emit('update_post', post);
+    });
+
     socket.on('vote_post', (data) => {
         const post = postHistory.find(p => p.id === data.postId);
         if (!post) return;
         const username = data.username;
-
         if (!post.likedBy) post.likedBy = [];
         if (!post.dislikedBy) post.dislikedBy = [];
 
@@ -135,7 +191,6 @@ io.on('connection', (socket) => {
         const post = postHistory.find(p => p.id === data.postId);
         if (!post) return;
         if (!post.comments) post.comments = [];
-
         const commentData = {
             id: Date.now() + Math.random(),
             username: data.username ? data.username.trim() : 'Anonymous',
@@ -143,9 +198,24 @@ io.on('connection', (socket) => {
             timestamp: new Date().toLocaleTimeString()
         };
         if (!commentData.text) return;
-        
         post.comments.push(commentData);
         io.emit('update_post', post);
+    });
+
+    socket.on('toggle_follow', (data) => {
+        const users = loadUsers();
+        const { follower, target } = data;
+        if (!users[follower] || !users[target] || follower === target) return;
+
+        if (!users[follower].following) users[follower].following = [];
+        const index = users[follower].following.indexOf(target);
+        if (index > -1) {
+            users[follower].following.splice(index, 1);
+        } else {
+            users[follower].following.push(target);
+        }
+        saveUsers(users);
+        sendUserData(socket, follower);
     });
 
     socket.on('disconnect', () => {
@@ -166,6 +236,16 @@ io.on('connection', (socket) => {
         console.log(`User disconnected: ${socket.id}`);
     });
 });
+
+function sendUserData(socket, username) {
+    const users = loadUsers();
+    if (users[username]) {
+        socket.emit('user_data', {
+            username: username,
+            following: users[username].following || []
+        });
+    }
+}
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {

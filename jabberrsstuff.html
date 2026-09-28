@@ -2,24 +2,20 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Post</title>
+    <title>Post Feed</title>
 </head>
 <body>
 
     <a href="index.html"><button>Back<--</button></a>
+    <h1 style="font-family: 'Comic Sans MS', cursive, sans-serif;">Post Feed</h1>
 
-    <h1 style="font-family: 'Comic Sans MS', cursive, sans-serif;">Post</h1>
-
-    <!-- Username Section -->
     <div id="login-section">
-        <label for="usernameInput">Enter your username (no spaces):</label>
-        <input type="text" id="usernameInput" placeholder="Username...">
-        <button id="joinBtn">Set Username</button>
+        <p>You need to log in to post or interact.</p>
+        <a href="auth.html"><button>Go to Login / Sign Up</button></a>
     </div>
 
-    <!-- Main Content Section -->
     <div id="main-section" style="display: none;">
-        <p>Logged in as: <strong id="displayUsername"></strong> <button id="changeNameBtn">Change</button></p>
+        <p>Logged in as: <strong id="displayUsername"></strong> <button id="logoutBtn">Log Out</button></p>
         
         <hr>
 
@@ -28,38 +24,36 @@
             <textarea id="postInput" placeholder="What's on your mind? Use @username..." rows="3" cols="40" required></textarea><br>
             <input type="file" id="postFileInput"><br>
             <button type="submit">Publish Post</button>
-            <!-- Autocomplete Dropdown for Posts -->
             <div id="postAutocomplete" style="border: 1px solid black; background: white; position: absolute; display: none; max-height: 100px; overflow-y: auto; width: 300px;"></div>
         </form>
 
-        <h2>Posts Feed</h2>
-        <!-- Search Bar -->
+        <h2>Feed</h2>
         <input type="text" id="searchInput" placeholder="Search posts by keyword or user..." style="width: 300px; margin-bottom: 10px;"><br>
         
+        <label><input type="checkbox" id="followingFilter"> Show Following Only</label><br><br>
+
         <div id="postsFeed"></div>
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
         const socket = io();
+        let username = localStorage.getItem('jabber_username') || '';
+        let knownUsers = [];
+        let followingList = [];
+        let allPosts = [];
 
-        const loginSection = document.getElementById('login-section');
         const mainSection = document.getElementById('main-section');
-        const usernameInput = document.getElementById('usernameInput');
-        const joinBtn = document.getElementById('joinBtn');
+        const loginSection = document.getElementById('login-section');
         const displayUsername = document.getElementById('displayUsername');
-        const changeNameBtn = document.getElementById('changeNameBtn');
-        
+        const logoutBtn = document.getElementById('logoutBtn');
         const postForm = document.getElementById('postForm');
         const postInput = document.getElementById('postInput');
         const postFileInput = document.getElementById('postFileInput');
         const postsFeed = document.getElementById('postsFeed');
         const postAutocomplete = document.getElementById('postAutocomplete');
         const searchInput = document.getElementById('searchInput');
-
-        let username = localStorage.getItem('jabber_username') || '';
-        let knownUsers = [];
-        let allPosts = [];
+        const followingFilter = document.getElementById('followingFilter');
 
         if (username) {
             displayUsername.textContent = username;
@@ -68,43 +62,22 @@
             socket.emit('register_user', username);
         }
 
-        // Prevent spaces in main username input fields
-        usernameInput.addEventListener('keydown', (e) => {
-            if (e.key === ' ') e.preventDefault();
-        });
-        usernameInput.addEventListener('input', () => {
-            usernameInput.value = usernameInput.value.replace(/\s+/g, '');
-        });
-
-        joinBtn.addEventListener('click', () => {
-            const name = usernameInput.value.trim();
-            if (name) {
-                username = name;
-                localStorage.setItem('jabber_username', username);
-                displayUsername.textContent = username;
-                loginSection.style.display = 'none';
-                mainSection.style.display = 'block';
-                socket.emit('register_user', username);
-            } else {
-                alert('Please enter a valid username.');
-            }
-        });
-
-        changeNameBtn.addEventListener('click', () => {
-            loginSection.style.display = 'block';
-            mainSection.style.display = 'none';
-            usernameInput.value = username;
-        });
-
-        usernameInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') joinBtn.click();
+        logoutBtn.addEventListener('click', () => {
+            localStorage.removeItem('jabber_username');
+            window.location.href = 'auth.html';
         });
 
         socket.on('update_user_list', (users) => {
             knownUsers = users;
         });
 
-        // Autocomplete for post textarea
+        socket.on('user_data', (data) => {
+            if (data.username === username) {
+                followingList = data.following || [];
+                renderPostsFeed();
+            }
+        });
+
         postInput.addEventListener('input', () => {
             const val = postInput.value;
             const cursorPos = postInput.selectionStart;
@@ -140,14 +113,8 @@
             postAutocomplete.style.display = 'none';
         });
 
-        postInput.addEventListener('blur', () => {
-            setTimeout(() => { postAutocomplete.style.display = 'none'; }, 200);
-        });
-
-        // Search filtering event listener
-        searchInput.addEventListener('input', () => {
-            renderPostsFeed();
-        });
+        searchInput.addEventListener('input', renderPostsFeed);
+        followingFilter.addEventListener('change', renderPostsFeed);
 
         socket.on('init_history', (data) => {
             allPosts = data.posts;
@@ -161,9 +128,7 @@
 
         socket.on('update_post', (updatedPost) => {
             const index = allPosts.findIndex(p => p.id === updatedPost.id);
-            if (index !== -1) {
-                allPosts[index] = updatedPost;
-            }
+            if (index !== -1) allPosts[index] = updatedPost;
             renderPostsFeed();
         });
 
@@ -192,11 +157,13 @@
         function renderPostsFeed() {
             postsFeed.innerHTML = '';
             const query = searchInput.value.toLowerCase();
+            const onlyFollowing = followingFilter.checked;
 
             const filteredPosts = allPosts.filter(post => {
                 const textMatch = post.text && post.text.toLowerCase().includes(query);
                 const userMatch = post.username && post.username.toLowerCase().includes(query);
-                return textMatch || userMatch;
+                const isFollowingMatch = !onlyFollowing || followingList.includes(post.username) || post.username === username;
+                return (textMatch || userMatch) && isFollowingMatch;
             });
 
             filteredPosts.forEach(post => {
@@ -210,6 +177,8 @@
         function buildPostHTML(post) {
             const isMentioned = username && post.text.includes(`@${username}`);
             let highlightStyle = isMentioned ? 'background-color: #ffff99; border: 1px solid orange; padding: 10px; margin-bottom: 10px;' : 'border: 1px solid black; padding: 10px; margin-bottom: 10px;';
+            const isFollowing = followingList.includes(post.username);
+            const followBtnText = isFollowing ? 'Unfollow' : 'Follow';
 
             let mediaHTML = '';
             if (post.file) {
@@ -227,11 +196,18 @@
                 });
             }
 
+            let followButtonHTML = (username && post.username !== username) ? `<button onclick="toggleFollow('${escapeHTML(post.username)}')">${followBtnText}</button>` : '';
+
             return `
                 <div style="${highlightStyle}">
-                    <p><strong>${escapeHTML(post.username)}</strong> posted at ${post.timestamp}</p>
+                    <p><strong>${escapeHTML(post.username)}</strong> ${followButtonHTML} <span style="float: right;">posted at ${post.timestamp}</span></p>
                     <p>${escapeHTML(post.text)}</p>
                     ${mediaHTML}
+                    <br>
+                    <button onclick="votePost('${post.id}', 'like')">👍 Like (${post.likes})</button>
+                    <button onclick="votePost('${post.id}', 'dislike')">👎 Dislike (${post.dislikes})</button>
+                    <button onclick="sharePost('${post.id}')">🔄 Share (${post.shares || 0})</button>
+                    
                     <hr>
                     <strong>Comments:</strong>
                     <div style="margin-top: 5px;">${commentsHTML || '<p><small>No comments yet.</small></p>'}</div>
@@ -243,9 +219,24 @@
             `;
         }
 
+        window.votePost = function(postId, type) {
+            if (!username) { alert('Please log in first!'); return; }
+            socket.emit('vote_post', { postId, username, type });
+        };
+
+        window.sharePost = function(postId) {
+            socket.emit('share_post', { postId });
+            alert('Post shared!');
+        };
+
+        window.toggleFollow = function(targetUser) {
+            if (!username) { alert('Please log in first!'); return; }
+            socket.emit('toggle_follow', { follower: username, target: targetUser });
+        };
+
         window.submitComment = function(e, postId) {
             e.preventDefault();
-            if (!username) { alert('Please set your username first!'); return; }
+            if (!username) { alert('Please log in first!'); return; }
             const input = e.target.querySelector('input');
             const text = input.value.trim();
             if (text) {

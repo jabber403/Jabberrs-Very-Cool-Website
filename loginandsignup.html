@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Login & Sign Up</title>
+</head>
+<body>
+    <a href="index.html"><button>Back<--</button></a>
+    <h1>Welcome to Jabberr</h1>
+
+    <div id="authContainer">
+        <h2>Login</h2>
+        <form id="loginForm">
+            <input type="text" id="loginUser" placeholder="Username" required><br><br>
+            <input type="password" id="loginPass" placeholder="Password" required><br><br>
+            <button type="submit">Log In</button>
+        </form>
+
+        <hr>
+
+        <h2>Sign Up</h2>
+        <form id="signupForm">
+            <input type="text" id="signupUser" placeholder="Choose Username" required><br><br>
+            <input type="password" id="signupPass" placeholder="Choose Password" required><br><br>
+            <button type="submit">Create Account</button>
+        </form>
+        <p id="authMessage" style="color: red;"></p>
+    </div>
+
+    <script>
+        const loginForm = document.getElementById('loginForm');
+        const signupForm = document.getElementById('signupForm');
+        const authMessage = document.getElementById('authMessage');
+
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('loginUser').value.trim();
+            const password = document.getElementById('loginPass').value;
+
+            const res = await fetch('/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
+            const data = await res.json();
+            if (data.success) {
+                localStorage.setItem('jabber_username', data.username);
+                window.location.href = 'index.html';
+            } else {
+                authMessage.textContent = data.message;
+            }
+        });
+
+        signupForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('signupUser').value.trim();
+            const password = document.getElementById('signupPass').value;
+
+            const res = await fetch('/api/signup', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
+            const data = await res.json();
+            if (data.success) {
+                localStorage.setItem('jabber_username', data.username);
+                window.location.href = 'index.html';
+            } else {
+                authMessage.textContent = data.message;
+            }
+        });
+    </script>
+</body>
+</html>

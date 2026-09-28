@@ -2,32 +2,26 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Jabberrs Awesome Chat App</title>
+    <title>Chat & DMs</title>
 </head>
 <body>
 
-    <!-- Audio Elements for Sound Effects -->
     <audio id="joinedSound" src="Joined.mp3" preload="auto"></audio>
     <audio id="leftSound" src="Left.mp3" preload="auto"></audio>
     <audio id="messageSound" src="Message.mp3" preload="auto"></audio>
     <audio id="sentSound" src="Sent.mp3" preload="auto"></audio>
 
     <a href="index.html"><button>Back<--</button></a>
-
     <h1>Jabberrs Awesome Chat App!!</h1>
 
-    <!-- Username Section -->
     <div id="login-section">
-        <label for="usernameInput">Enter your username (no spaces):</label>
-        <input type="text" id="usernameInput" placeholder="Username...">
-        <button id="joinBtn">Join Chat</button>
+        <p>Please log in to use the chat.</p>
+        <a href="auth.html"><button>Go to Login / Sign Up</button></a>
     </div>
 
-    <!-- Chat Section (Hidden until username is set) -->
     <div id="chat-section" style="display: none;">
-        <p>Logged in as: <strong id="displayUsername"></strong> <button id="changeNameBtn">Change</button></p>
+        <p>Logged in as: <strong id="displayUsername"></strong> <button id="logoutBtn">Log Out</button></p>
         
-        <!-- View Toggle Navigation Buttons -->
         <div>
             <button id="publicChatViewBtn">Public Chat Room</button>
             <button id="dmViewBtn">Direct Messages (DMs)</button>
@@ -35,12 +29,10 @@
 
         <hr>
 
-        <!-- PUBLIC CHAT CONTAINER -->
         <div id="publicChatContainer">
             <h2>Public Chat Room</h2>
             <div id="chatBox" style="border: 1px solid black; height: 250px; overflow-y: scroll; margin-bottom: 10px; padding: 5px;"></div>
 
-            <!-- Message Input Form with Autocomplete Container -->
             <form id="chatForm" style="position: relative;">
                 <input type="text" id="messageInput" placeholder="Type a public message or use @username..." autocomplete="off" required style="width: 300px;">
                 <input type="file" id="fileInput">
@@ -49,10 +41,8 @@
             </form>
         </div>
 
-        <!-- DIRECT MESSAGES CONTAINER (Hidden by default) -->
         <div id="dmContainer" style="display: none;">
             <h2>Direct Messages</h2>
-            
             <div>
                 <strong>Online Users:</strong>
                 <ul id="onlineUsersList"></ul>
@@ -64,7 +54,7 @@
             <div id="dmBox" style="border: 1px solid black; height: 200px; overflow-y: scroll; margin-bottom: 10px; padding: 5px;"></div>
 
             <form id="dmForm" style="position: relative;">
-                <input type="text" id="dmInput" placeholder="Type a private message or use @username..." autocomplete="off" required style="width: 300px;">
+                <input type="text" id="dmInput" placeholder="Type a private message..." autocomplete="off" required style="width: 300px;">
                 <button type="submit" id="sendDmBtn" disabled>Send DM</button>
                 <div id="dmAutocomplete" style="border: 1px solid black; background: white; position: absolute; display: none; max-height: 100px; overflow-y: auto; width: 300px;"></div>
             </form>
@@ -74,13 +64,14 @@
     <script src="/socket.io/socket.io.js"></script>
     <script>
         const socket = io();
+        let username = localStorage.getItem('jabber_username') || '';
+        let selectedDmUser = '';
+        let knownUsers = [];
 
         const loginSection = document.getElementById('login-section');
         const chatSection = document.getElementById('chat-section');
-        const usernameInput = document.getElementById('usernameInput');
-        const joinBtn = document.getElementById('joinBtn');
         const displayUsername = document.getElementById('displayUsername');
-        const changeNameBtn = document.getElementById('changeNameBtn');
+        const logoutBtn = document.getElementById('logoutBtn');
         
         const publicChatContainer = document.getElementById('publicChatContainer');
         const dmContainer = document.getElementById('dmContainer');
@@ -101,15 +92,10 @@
         const currentDmTarget = document.getElementById('currentDmTarget');
         const dmAutocomplete = document.getElementById('dmAutocomplete');
 
-        // Sound Elements
         const joinedSound = document.getElementById('joinedSound');
         const leftSound = document.getElementById('leftSound');
         const messageSound = document.getElementById('messageSound');
         const sentSound = document.getElementById('sentSound');
-
-        let username = localStorage.getItem('jabber_username') || '';
-        let selectedDmUser = '';
-        let knownUsers = [];
 
         if (username) {
             displayUsername.textContent = username;
@@ -118,15 +104,9 @@
             socket.emit('register_user', username);
         }
 
-        if (window.Notification && Notification.permission !== "granted") {
-            Notification.requestPermission();
-        }
-
-        usernameInput.addEventListener('keydown', (e) => {
-            if (e.key === ' ') e.preventDefault();
-        });
-        usernameInput.addEventListener('input', () => {
-            usernameInput.value = usernameInput.value.replace(/\s+/g, '');
+        logoutBtn.addEventListener('click', () => {
+            localStorage.removeItem('jabber_username');
+            window.location.href = 'auth.html';
         });
 
         publicChatViewBtn.addEventListener('click', () => {
@@ -137,30 +117,6 @@
         dmViewBtn.addEventListener('click', () => {
             publicChatContainer.style.display = 'none';
             dmContainer.style.display = 'block';
-        });
-
-        joinBtn.addEventListener('click', () => {
-            const name = usernameInput.value.trim();
-            if (name) {
-                username = name;
-                localStorage.setItem('jabber_username', username);
-                displayUsername.textContent = username;
-                loginSection.style.display = 'none';
-                chatSection.style.display = 'block';
-                socket.emit('register_user', username);
-            } else {
-                alert('Please enter a valid username.');
-            }
-        });
-
-        changeNameBtn.addEventListener('click', () => {
-            loginSection.style.display = 'block';
-            chatSection.style.display = 'none';
-            usernameInput.value = username;
-        });
-
-        usernameInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') joinBtn.click();
         });
 
         socket.on('update_user_list', (users) => {
@@ -182,50 +138,6 @@
             dmBox.innerHTML += `<p><small>--- Started DM conversation with ${escapeHTML(targetUser)} ---</small></p>`;
         };
 
-        function setupAutocomplete(inputField, dropdownDiv) {
-            inputField.addEventListener('input', () => {
-                const val = inputField.value;
-                const cursorPos = inputField.selectionStart;
-                const textBeforeCursor = val.substring(0, cursorPos);
-                const lastAtIndex = textBeforeCursor.lastIndexOf('@');
-
-                if (lastAtIndex !== -1) {
-                    const query = textBeforeCursor.substring(lastAtIndex + 1);
-                    if (!query.includes(' ')) {
-                        const filtered = knownUsers.filter(u => u.toLowerCase().startsWith(query.toLowerCase()));
-                        if (filtered.length > 0) {
-                            dropdownDiv.innerHTML = '';
-                            filtered.forEach(user => {
-                                const div = document.createElement('div');
-                                div.style.padding = '3px';
-                                div.style.cursor = 'pointer';
-                                div.textContent = '@' + user;
-                                div.addEventListener('mousedown', (e) => {
-                                    e.preventDefault();
-                                    const beforeAt = val.substring(0, lastAtIndex);
-                                    const afterCursor = val.substring(cursorPos);
-                                    inputField.value = beforeAt + '@' + user + ' ' + afterCursor;
-                                    dropdownDiv.style.display = 'none';
-                                    inputField.focus();
-                                });
-                                dropdownDiv.appendChild(div);
-                            });
-                            dropdownDiv.style.display = 'block';
-                            return;
-                        }
-                    }
-                }
-                dropdownDiv.style.display = 'none';
-            });
-
-            inputField.addEventListener('blur', () => {
-                setTimeout(() => { dropdownDiv.style.display = 'none'; }, 200);
-            });
-        }
-
-        setupAutocomplete(messageInput, chatAutocomplete);
-        setupAutocomplete(dmInput, dmAutocomplete);
-
         socket.on('init_history', (data) => {
             chatBox.innerHTML = '';
             data.messages.forEach(msg => appendMessage(msg, false));
@@ -243,15 +155,12 @@
                 dmBox.scrollTop = dmBox.scrollHeight;
 
                 if (dm.sender !== username) {
+                    messageSound.currentTime = 0;
                     messageSound.play().catch(() => {});
-                    if (window.Notification && Notification.permission === "granted") {
-                        new Notification(`New DM from ${dm.sender}`, { body: dm.text });
-                    }
                 }
             }
         });
 
-        // Public Message Submit
         chatForm.addEventListener('submit', (e) => {
             e.preventDefault();
             const text = messageInput.value;
@@ -260,7 +169,6 @@
 
             if (!text.trim() && !file) return;
 
-            // Play sent sound for public message
             sentSound.currentTime = 0;
             sentSound.play().catch(() => {});
 
@@ -270,11 +178,7 @@
                     socket.emit('chat_message', {
                         username: username,
                         text: text,
-                        file: {
-                            name: file.name,
-                            type: file.type,
-                            data: event.target.result
-                        }
+                        file: { name: file.name, type: file.type, data: event.target.result }
                     });
                     messageInput.value = '';
                     fileInput.value = '';
@@ -286,13 +190,11 @@
             }
         });
 
-        // Direct Message Submit
         dmForm.addEventListener('submit', (e) => {
             e.preventDefault();
             const text = dmInput.value.trim();
             dmAutocomplete.style.display = 'none';
             if (text && selectedDmUser) {
-                // Play sent sound for private message
                 sentSound.currentTime = 0;
                 sentSound.play().catch(() => {});
 
@@ -317,21 +219,17 @@
 
                 if (isNew) {
                     if (msg.text.includes('joined')) {
+                        joinedSound.currentTime = 0;
                         joinedSound.play().catch(() => {});
                     } else if (msg.text.includes('left')) {
+                        leftSound.currentTime = 0;
                         leftSound.play().catch(() => {});
                     }
                 }
                 return;
             }
 
-            const isMentioned = username && msg.text.includes(`@${username}`);
-            if (isMentioned) {
-                messageElement.style.backgroundColor = '#ffff99';
-            }
-
             let contentHTML = `<strong>[${msg.timestamp}] ${escapeHTML(msg.username)}:</strong> ${escapeHTML(msg.text)}`;
-
             if (msg.file) {
                 if (msg.file.type.startsWith('image/')) {
                     contentHTML += `<br><img src="${msg.file.data}" alt="${escapeHTML(msg.file.name)}" style="max-width: 200px; display: block; margin-top: 5px;">`;
@@ -345,10 +243,8 @@
             chatBox.scrollTop = chatBox.scrollHeight;
 
             if (isNew && msg.username !== username) {
+                messageSound.currentTime = 0;
                 messageSound.play().catch(() => {});
-                if (isMentioned && window.Notification && Notification.permission === "granted") {
-                    new Notification(`New mention from ${msg.username}`, { body: msg.text });
-                }
             }
         }
 
