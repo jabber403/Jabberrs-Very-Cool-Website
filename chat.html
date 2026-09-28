@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Simple Messaging Platform</title>
+</head>
+<body>
+
+    <h1>Messaging Platform</h1>
+
+    <!-- Username Section -->
+    <div id="login-section">
+        <label for="usernameInput">Enter your username:</label>
+        <input type="text" id="usernameInput" placeholder="Username...">
+        <button id="joinBtn">Join Chat</button>
+    </div>
+
+    <!-- Chat Section (Hidden until username is set) -->
+    <div id="chat-section" style="display: none;">
+        <p>Logged in as: <strong id="displayUsername"></strong></p>
+        
+        <!-- Messages Container -->
+        <div id="chatBox" style="border: 1px solid black; height: 300px; overflow-y: scroll; margin-bottom: 10px; padding: 5px;"></div>
+
+        <!-- Message Input Form -->
+        <form id="chatForm">
+            <input type="text" id="messageInput" placeholder="Type a message..." autocomplete="off" autofocus required>
+            <button type="submit">Send</button>
+        </form>
+    </div>
+
+    <!-- Include Socket.io Client Script -->
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+
+        const loginSection = document.getElementById('login-section');
+        const chatSection = document.getElementById('chat-section');
+        const usernameInput = document.getElementById('usernameInput');
+        const joinBtn = document.getElementById('joinBtn');
+        const displayUsername = document.getElementById('displayUsername');
+        
+        const chatBox = document.getElementById('chatBox');
+        const chatForm = document.getElementById('chatForm');
+        const messageInput = document.getElementById('messageInput');
+
+        let username = '';
+
+        // Handle joining chat
+        joinBtn.addEventListener('click', () => {
+            const name = usernameInput.value.trim();
+            if (name) {
+                username = name;
+                displayUsername.textContent = username;
+                loginSection.style.display = 'none';
+                chatSection.style.display = 'block';
+            } else {
+                alert('Please enter a valid username.');
+            }
+        });
+
+        // Allow pressing Enter in username field
+        usernameInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                joinBtn.click();
+            }
+        });
+
+        // Receive past message history upon connection
+        socket.on('init_history', (history) => {
+            history.forEach(msg => appendMessage(msg));
+        });
+
+        // Receive new incoming messages
+        socket.on('chat_message', (msg) => {
+            appendMessage(msg);
+        });
+
+        // Handle sending messages
+        chatForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const text = messageInput.value;
+            if (text.trim() && username) {
+                socket.emit('chat_message', { username: username, text: text });
+                messageInput.value = '';
+            }
+        });
+
+        // Helper function to append a message to the chat box
+        function appendMessage(msg) {
+            const messageElement = document.createElement('div');
+            messageElement.innerHTML = `<strong>[${msg.timestamp}] ${escapeHTML(msg.username)}:</strong> ${escapeHTML(msg.text)}`;
+            chatBox.appendChild(messageElement);
+            // Auto-scroll to the bottom
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        // Simple utility to prevent basic HTML injection
+        function escapeHTML(str) {
+            return str.replace(/[&<>'"]/g, 
+                tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
+            );
+        }
+    </script>
+</body>
+</html>
