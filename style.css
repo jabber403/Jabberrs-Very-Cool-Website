@@ -2,3 +2,7 @@
   color: crimson;
   font-family: Impact, Haettenschweiler, 'Arial Narrow Bold', sans-serif;
 }
+
+::backdrop{
+    color: black;
+}
