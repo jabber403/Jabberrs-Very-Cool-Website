@@ -3,6 +3,7 @@
   font-family: Impact, Haettenschweiler, 'Arial Narrow Bold', sans-serif;
 }
 
-::backdrop{
-    color: black;
+body {
+    background-color: black;
+    color: white; /* Optional: makes your text white so you can actually read it against the black background! */
 }
