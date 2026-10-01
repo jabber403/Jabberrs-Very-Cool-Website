@@ -1,4 +1,4 @@
-.title-1{
+h1, h2, h3, h5, h6 {
   color: crimson;
   font-family: Impact, Haettenschweiler, 'Arial Narrow Bold', sans-serif;
 }
