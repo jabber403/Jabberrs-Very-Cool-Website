@@ -7,3 +7,12 @@ body {
     background-color: black;
     color: white; /* Optional: makes your text white so you can actually read it against the black background! */
 }
+
+.blackbutton {
+    background: linear-gradient(to bottom, #2E2E2E, #1A1A1A);
+    color: #F5F5F5;
+    border: 2px black solid;
+    padding: 5px;
+    font-size: 15px;
+    cursor: pointer;
+}
