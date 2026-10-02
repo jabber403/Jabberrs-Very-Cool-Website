@@ -511,6 +511,13 @@ function sendUserData(socket, username) {
     }
 }
 
+// Add inside your io.on('connection', (socket) => { ... }) block:
+
+    socket.on('music_action', (data) => {
+        // Broadcast play/pause and timestamp to all other connected clients
+        socket.broadcast.emit('music_sync', data);
+    });
+
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);

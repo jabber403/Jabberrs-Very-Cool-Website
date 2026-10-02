@@ -8,6 +8,12 @@
 </head>
 <body>
 
+    <!-- Persistent Top-Right Music Player -->
+    <div id="globalMusicPlayer" style="position: absolute; top: 10px; right: 260px; background: #222; border: 1px solid orange; padding: 4px 8px; border-radius: 5px; z-index: 1000; font-family: sans-serif; font-size: 11px; color: orange;">
+        <span>🎵 Halloween</span>
+        <button id="globalPlayBtn" onclick="toggleGlobalMusic()" style="background: orange; border: none; cursor: pointer; font-weight: bold; padding: 2px 5px; border-radius: 3px; margin-left: 4px;">▶</button>
+    </div>
+
     <!-- Top Right Header for Auth State -->
     <div id="authHeader" style="position: absolute; top: 10px; right: 10px; text-align: right;">
         <span id="userInfo" style="display: none; margin-right: 10px;">Logged in as: <strong id="displayUsername"></strong></span>
@@ -18,11 +24,8 @@
     <h1 class="title-1">Welcome to Jabberrs Very Cool Website!!</h1>
 
     <a href="./meetjabberr.html">Meet Jabberr</a>
-
     <a href="https://www.venmo.com/u/Jabberrr">Donate?!</a>
-
     <a href="https://cash.app/$Royceter13">Donate to Jabberrs Friend?!</a>
-
     <a href="./games.html">Games</a>
 
     <h2 class="title-1">Chat!!</h2>
@@ -49,14 +52,6 @@
     <div>
         <p>Halloween Update!!!</p>
     </div>
-
-    <!-- Halloween Music Player Section -->
-    <div style="margin: 20px 0; border: 2px dashed orange; padding: 15px; display: inline-block; background: #111; border-radius: 8px;">
-        <p style="margin-top: 0; color: orange;">🎵 Spooky Background Music</p>
-        <button id="musicToggleBtn" onclick="toggleHalloweenMusic()">▶ Play Halloween Music</button>
-    </div>
-    <!-- HALLOWEEN AUDIO ELEMENT -->
-    <audio id="halloweenAudio" src="Halloween.mp3" loop preload="auto"></audio>
 
     <h1 class="title-1">Jabberrs Socials:</h1>
     <div>
@@ -91,48 +86,69 @@
         <img src="Pumpkin.png" alt="Spooky Pumpkin" style="width: 170px; display: block; margin: 0 auto; filter: drop-shadow(0px 6px 12px rgba(255, 119, 0, 0.7));">
     </div>
 
+    <!-- AUDIO ELEMENT & SOCKET SYNC SCRIPT -->
+    <audio id="persistentAudio" src="Halloween.mp3" loop preload="auto"></audio>
+    <script src="/socket.io/socket.io.js"></script>
     <script>
-        const username = localStorage.getItem('jabber_username');
-        const userInfo = document.getElementById('userInfo');
-        const displayUsername = document.getElementById('displayUsername');
-        const logoutBtn = document.getElementById('logoutBtn');
-        const loginLink = document.getElementById('loginLink');
+        const socket = io();
+        const pAudio = document.getElementById('persistentAudio');
+        const pBtn = document.getElementById('globalPlayBtn');
 
+        // Restore playback position on load
+        window.addEventListener('load', () => {
+            const savedTime = parseFloat(localStorage.getItem('music_time') || '0');
+            const isPlaying = localStorage.getItem('music_playing') === 'true';
+            pAudio.currentTime = savedTime;
+            if (isPlaying) {
+                pAudio.play().catch(() => {});
+                pBtn.textContent = '⏸';
+            }
+        });
+
+        setInterval(() => {
+            if (!pAudio.paused) {
+                localStorage.setItem('music_time', pAudio.currentTime);
+            }
+        }, 500);
+
+        function toggleGlobalMusic() {
+            if (pAudio.paused) {
+                pAudio.play();
+                pBtn.textContent = '⏸';
+                localStorage.setItem('music_playing', 'true');
+                socket.emit('music_action', { action: 'play', time: pAudio.currentTime });
+            } else {
+                pAudio.pause();
+                pBtn.textContent = '▶';
+                localStorage.setItem('music_playing', 'false');
+                socket.emit('music_action', { action: 'pause', time: pAudio.currentTime });
+            }
+        }
+
+        socket.on('music_sync', (data) => {
+            pAudio.currentTime = data.time;
+            if (data.action === 'play') {
+                pAudio.play().catch(() => {});
+                pBtn.textContent = '⏸';
+                localStorage.setItem('music_playing', 'true');
+            } else {
+                pAudio.pause();
+                pBtn.textContent = '▶';
+                localStorage.setItem('music_playing', 'false');
+            }
+        });
+
+        const username = localStorage.getItem('jabber_username');
         if (username) {
-            displayUsername.textContent = username;
-            userInfo.style.display = 'inline';
-            logoutBtn.style.display = 'inline-block';
-            loginLink.style.display = 'none';
-        } else {
-            userInfo.style.display = 'none';
-            logoutBtn.style.display = 'none';
-            loginLink.style.display = 'inline';
+            document.getElementById('displayUsername').textContent = username;
+            document.getElementById('userInfo').style.display = 'inline';
+            document.getElementById('logoutBtn').style.display = 'inline-block';
+            document.getElementById('loginLink').style.display = 'none';
         }
 
         function logout() {
             localStorage.removeItem('jabber_username');
             window.location.reload();
-        }
-
-        // Halloween Music Script
-        const halloweenAudio = document.getElementById('halloweenAudio');
-        const musicToggleBtn = document.getElementById('musicToggleBtn');
-        let isPlaying = false;
-
-        function toggleHalloweenMusic() {
-            if (!isPlaying) {
-                halloweenAudio.play().then(() => {
-                    isPlaying = true;
-                    musicToggleBtn.textContent = '⏸ Pause Halloween Music';
-                }).catch(e => {
-                    console.log('Autoplay or audio load failed:', e);
-                    alert('Could not play Halloween.mp3. Make sure the file is in the same folder!');
-                });
-            } else {
-                halloweenAudio.pause();
-                isPlaying = false;
-                musicToggleBtn.textContent = '▶ Play Halloween Music';
-            }
         }
     </script>
 </body>
