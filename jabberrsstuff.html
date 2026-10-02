@@ -21,10 +21,11 @@
         
         <hr>
 
+        <!-- Profile Modal View (Hidden by default) -->
         <div id="profileModal" style="display: none; border: 2px solid orange; padding: 15px; margin-bottom: 20px; background: #1a1a1a;">
             <button onclick="closeProfile()">Close Profile</button>
             <h2 id="profileUsername"></h2>
-            <p><strong>Followers:</strong> <span id="profileFollowersCount">0</span> | <strong>Total Likes:</strong> <span id="profileLikesCount">0</span></p>
+            <p><strong>Followers:</strong> <span id="profileFollowersCount">Active</span> | <strong>Total Likes:</strong> <span id="profileLikesCount">0</span></p>
             <button id="profileFollowBtn" onclick="toggleProfileFollow()"></button>
             <h3>User's Posts:</h3>
             <div id="profilePostsFeed"></div>
@@ -42,6 +43,7 @@
         <h2>Feed</h2>
         <input type="text" id="searchInput" placeholder="Search posts by keyword or user..." style="width: 300px; max-width: 100%; margin-bottom: 10px;"><br>
         
+        <!-- Filter Controls -->
         <div style="margin-bottom: 15px;">
             <label>Sort / Filter: 
                 <select id="sortFilter">
@@ -65,9 +67,8 @@
         let knownUsers = [];
         let followingList = [];
         let allPosts = [];
-        let userLikes = []; // List of post IDs liked by current user
+        let userLikes = [];
         let viewingProfileUser = null;
-        let allUsersData = {}; // Stores follower & like counts per user from backend if provided
 
         const mainSection = document.getElementById('main-section');
         const loginSection = document.getElementById('login-section');
@@ -156,6 +157,7 @@
         socket.on('init_history', (data) => {
             allPosts = data.posts;
             renderPostsFeed();
+            checkUrlForPost();
         });
 
         socket.on('new_post', (post) => {
@@ -192,6 +194,20 @@
             }
         });
 
+        function checkUrlForPost() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const postId = urlParams.get('p');
+            if (postId) {
+                setTimeout(() => {
+                    const postElem = document.getElementById(postId);
+                    if (postElem) {
+                        postElem.scrollIntoView({ behavior: 'smooth' });
+                        postElem.style.border = '3px solid #ff7700';
+                    }
+                }, 300);
+            }
+        }
+
         function renderPostsFeed() {
             postsFeed.innerHTML = '';
             const query = searchInput.value.toLowerCase();
@@ -206,13 +222,11 @@
                 return (textMatch || userMatch) && isFollowingMatch && isLikedMatch;
             });
 
-            // Sorting logic
             if (sortMode === 'oldest') {
                 filteredPosts.sort((a, b) => (a.timestamp > b.timestamp ? 1 : -1));
             } else if (sortMode === 'popular') {
                 filteredPosts.sort((a, b) => (b.likes || 0) - (a.likes || 0));
             } else {
-                // Default: newest
                 filteredPosts.sort((a, b) => (a.timestamp < b.timestamp ? 1 : -1));
             }
 
@@ -305,8 +319,6 @@
             userPosts.forEach(p => totalLikes += (p.likes || 0));
             profileLikesCount.textContent = totalLikes;
 
-            // Approximate or count followers if available from known data
-            profileFollowersCount.textContent = "Active"; 
             if (username && targetUser !== username) {
                 const isFollowing = followingList.includes(targetUser);
                 profileFollowBtn.textContent = isFollowing ? 'Unfollow' : 'Follow';
@@ -340,7 +352,12 @@
 
         window.sharePost = function(postId) {
             socket.emit('share_post', { postId });
-            alert('Post shared!');
+            const shareUrl = `${window.location.origin}${window.location.pathname}?p=${postId}`;
+            navigator.clipboard.writeText(shareUrl).then(() => {
+                alert('Post link copied to clipboard: ' + shareUrl);
+            }).catch(() => {
+                prompt('Copy this link:', shareUrl);
+            });
         };
 
         window.toggleFollow = function(targetUser) {

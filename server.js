@@ -41,8 +41,9 @@ app.post('/api/signup', (req, res) => {
         return res.json({ success: false, message: 'Username already exists.' });
     }
     users[trimmed] = {
-        password: password, // In production, hash this!
-        following: []
+        password: password,
+        following: [],
+        likes: []
     };
     saveUsers(users);
     return res.json({ success: true, username: trimmed });
@@ -76,7 +77,6 @@ io.on('connection', (socket) => {
         const trimmedName = username.trim();
         connectedUsers[socket.id] = trimmedName;
 
-        // Broadcast join system message
         const joinMsg = {
             id: Date.now() + Math.random(),
             type: 'system',
@@ -127,7 +127,7 @@ io.on('connection', (socket) => {
     // Posts & Social Features
     socket.on('create_post', (data) => {
         const postData = {
-            id: 'post_' + Date.now() + Math.random(),
+            id: 'post_' + Date.now() + Math.floor(Math.random() * 1000),
             username: data.username ? data.username.trim() : 'Anonymous',
             text: data.text ? data.text.trim() : '',
             file: data.file || null,
@@ -159,7 +159,6 @@ io.on('connection', (socket) => {
         if (!post.likedBy) post.likedBy = [];
         if (!post.dislikedBy) post.dislikedBy = [];
 
-        // Track likes for current user to compute profile likes correctly
         const users = loadUsers();
         if (username && users[username]) {
             if (!users[username].likes) users[username].likes = [];
@@ -202,7 +201,12 @@ io.on('connection', (socket) => {
         }
         saveUsers(users);
         io.emit('update_post', post);
-        if (username) sendUserData(socket, username);
+        
+        // Refresh target user's data socket if connected
+        const targetSocketId = Object.keys(connectedUsers).find(key => connectedUsers[key] === username);
+        if (targetSocketId) {
+            sendUserData(io.sockets.sockets.get(targetSocketId), username);
+        }
     });
 
     socket.on('add_comment', (data) => {
@@ -250,7 +254,12 @@ io.on('connection', (socket) => {
             users[follower].following.push(target);
         }
         saveUsers(users);
-        sendUserData(socket, follower);
+
+        // Find the follower's socket and send updated user data
+        const followerSocketId = Object.keys(connectedUsers).find(key => connectedUsers[key] === follower);
+        if (followerSocketId) {
+            sendUserData(io.sockets.sockets.get(followerSocketId), follower);
+        }
     });
 
     socket.on('disconnect', () => {
@@ -273,6 +282,7 @@ io.on('connection', (socket) => {
 });
 
 function sendUserData(socket, username) {
+    if (!socket) return;
     const users = loadUsers();
     if (users[username]) {
         socket.emit('user_data', {
