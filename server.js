@@ -14,47 +14,51 @@ app.use(express.static(path.join(__dirname)));
 app.use(express.json());
 
 const USERS_FILE = path.join(__dirname, 'users.json');
+const BANNED_FILE = path.join(__dirname, 'banned.json');
 
-// Helper functions for user storage
+// Set your admin username here!
+const ADMIN_USERNAME = 'Jabberr';
+
 function loadUsers() {
     if (!fs.existsSync(USERS_FILE)) return {};
-    try {
-        return JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
-    } catch (e) {
-        return {};
-    }
+    try { return JSON.parse(fs.readFileSync(USERS_FILE, 'utf8')); } catch (e) { return {}; }
 }
+function saveUsers(users) { fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2)); }
 
-function saveUsers(users) {
-    fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
+function loadBanned() {
+    if (!fs.existsSync(BANNED_FILE)) return [];
+    try { return JSON.parse(fs.readFileSync(BANNED_FILE, 'utf8')); } catch (e) { return []; }
 }
+function saveBanned(banned) { fs.writeFileSync(BANNED_FILE, JSON.stringify(banned, null, 2)); }
 
 // REST endpoints for Login and Signup
 app.post('/api/signup', (req, res) => {
     const { username, password } = req.body;
-    if (!username || !password) {
-        return res.json({ success: false, message: 'Username and password required.' });
-    }
+    if (!username || !password) return res.json({ success: false, message: 'Username and password required.' });
     const trimmed = username.trim();
-    const users = loadUsers();
-    if (users[trimmed]) {
-        return res.json({ success: false, message: 'Username already exists.' });
+    
+    const banned = loadBanned();
+    if (banned.includes(trimmed.toLowerCase())) {
+        return res.json({ success: false, message: 'This username is banned from the website.' });
     }
-    users[trimmed] = {
-        password: password,
-        following: [],
-        likes: []
-    };
+
+    const users = loadUsers();
+    if (users[trimmed]) return res.json({ success: false, message: 'Username already exists.' });
+    users[trimmed] = { password: password, following: [], likes: [] };
     saveUsers(users);
     return res.json({ success: true, username: trimmed });
 });
 
 app.post('/api/login', (req, res) => {
     const { username, password } = req.body;
-    if (!username || !password) {
-        return res.json({ success: false, message: 'Username and password required.' });
-    }
+    if (!username || !password) return res.json({ success: false, message: 'Username and password required.' });
     const trimmed = username.trim();
+
+    const banned = loadBanned();
+    if (banned.includes(trimmed.toLowerCase())) {
+        return res.json({ success: false, message: 'This account has been banned.' });
+    }
+
     const users = loadUsers();
     if (!users[trimmed] || users[trimmed].password !== password) {
         return res.json({ success: false, message: 'Invalid username or password.' });
@@ -62,8 +66,8 @@ app.post('/api/login', (req, res) => {
     return res.json({ success: true, username: trimmed });
 });
 
-const postHistory = [];
-const messageHistory = [];
+let postHistory = [];
+let messageHistory = [];
 const MAX_HISTORY = 50;
 const connectedUsers = {}; // socket.id -> username
 
@@ -75,6 +79,13 @@ io.on('connection', (socket) => {
     socket.on('register_user', (username) => {
         if (!username) return;
         const trimmedName = username.trim();
+
+        const banned = loadBanned();
+        if (banned.includes(trimmedName.toLowerCase())) {
+            socket.emit('banned_error', 'You are banned from this chat.');
+            return;
+        }
+
         connectedUsers[socket.id] = trimmedName;
 
         const joinMsg = {
@@ -91,14 +102,59 @@ io.on('connection', (socket) => {
         sendUserData(socket, trimmedName);
     });
 
-    // Chat handling
+    // Chat handling & Admin Commands
     socket.on('chat_message', (data) => {
+        const username = data.username ? data.username.trim() : 'Anonymous';
+        const text = data.text ? data.text.trim() : '';
+        const file = data.file || null;
+
+        // Check for Admin Commands if sent by Jabberr
+        if (username.toLowerCase() === ADMIN_USERNAME.toLowerCase() && text.startsWith('/')) {
+            const parts = text.split(' ');
+            const command = parts[0].toLowerCase();
+            const target = parts[1] ? parts[1].trim() : '';
+
+            if (command === '/kick' && target) {
+                const targetSocketId = Object.keys(connectedUsers).find(
+                    key => connectedUsers[key].toLowerCase() === target.toLowerCase()
+                );
+                if (targetSocketId) {
+                    io.to(targetSocketId).emit('force_disconnect', 'You have been kicked by the admin.');
+                    io.sockets.sockets.get(targetSocketId)?.disconnect();
+                }
+                sendSystemMessage(`⚠️ Admin kicked ${target}.`);
+                return;
+            } 
+            else if (command === '/ban' && target) {
+                const banned = loadBanned();
+                if (!banned.includes(target.toLowerCase())) {
+                    banned.push(target.toLowerCase());
+                    saveBanned(banned);
+                }
+                const targetSocketId = Object.keys(connectedUsers).find(
+                    key => connectedUsers[key].toLowerCase() === target.toLowerCase()
+                );
+                if (targetSocketId) {
+                    io.to(targetSocketId).emit('force_disconnect', 'You have been permanently banned by the admin.');
+                    io.sockets.sockets.get(targetSocketId)?.disconnect();
+                }
+                sendSystemMessage(`🔨 Admin permanently banned ${target}.`);
+                return;
+            }
+            else if (command === '/clear') {
+                messageHistory = [];
+                io.emit('clear_chat');
+                sendSystemMessage(`🧹 Admin cleared the chat history.`);
+                return;
+            }
+        }
+
         const messageData = {
             id: Date.now() + Math.random(),
             type: 'user',
-            username: data.username ? data.username.trim() : 'Anonymous',
-            text: data.text ? data.text.trim() : '',
-            file: data.file || null,
+            username: username,
+            text: text,
+            file: file,
             timestamp: new Date().toLocaleTimeString()
         };
         if (!messageData.text && !messageData.file) return;
@@ -124,7 +180,6 @@ io.on('connection', (socket) => {
         socket.emit('private_message', dmData);
     });
 
-    // Posts & Social Features
     socket.on('create_post', (data) => {
         const postData = {
             id: 'post_' + Date.now() + Math.floor(Math.random() * 1000),
@@ -202,7 +257,6 @@ io.on('connection', (socket) => {
         saveUsers(users);
         io.emit('update_post', post);
         
-        // Refresh target user's data socket if connected
         const targetSocketId = Object.keys(connectedUsers).find(key => connectedUsers[key] === username);
         if (targetSocketId) {
             sendUserData(io.sockets.sockets.get(targetSocketId), username);
@@ -255,7 +309,6 @@ io.on('connection', (socket) => {
         }
         saveUsers(users);
 
-        // Find the follower's socket and send updated user data
         const followerSocketId = Object.keys(connectedUsers).find(key => connectedUsers[key] === follower);
         if (followerSocketId) {
             sendUserData(io.sockets.sockets.get(followerSocketId), follower);
@@ -280,6 +333,18 @@ io.on('connection', (socket) => {
         console.log(`User disconnected: ${socket.id}`);
     });
 });
+
+function sendSystemMessage(text) {
+    const sysMsg = {
+        id: Date.now() + Math.random(),
+        type: 'system',
+        text: text,
+        timestamp: new Date().toLocaleTimeString()
+    };
+    messageHistory.push(sysMsg);
+    if (messageHistory.length > MAX_HISTORY) messageHistory.shift();
+    io.emit('chat_message', sysMsg);
+}
 
 function sendUserData(socket, username) {
     if (!socket) return;

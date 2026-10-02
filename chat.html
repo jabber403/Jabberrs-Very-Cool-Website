@@ -3,106 +3,58 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chat & DMs</title>
+    <title>Jabberrs Awesome Chat App!!</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-    <audio id="joinedSound" src="Joined.mp3" preload="auto"></audio>
-    <audio id="leftSound" src="Left.mp3" preload="auto"></audio>
-    <audio id="messageSound" src="Message.mp3" preload="auto"></audio>
-    <audio id="sentSound" src="Sent.mp3" preload="auto"></audio>
-
     <a href="index.html">Back&lt;--</a>
-    <h1>Jabberrs Awesome Chat App!!</h1>
+    <h1 style="font-family: 'Comic Sans MS', cursive, sans-serif;">Jabberrs Awesome Chat App!!</h1>
 
-    <div id="login-section">
-        <p>Please log in to use the chat.</p>
+    <div id="login-section" style="display: none;">
+        <p>You need to log in to chat.</p>
         <a href="auth.html">Go to Login / Sign Up</a>
     </div>
 
-    <div id="chat-section" style="display: none;">
+    <div id="main-section">
         <p>Logged in as: <strong id="displayUsername"></strong> <button id="logoutBtn">Log Out</button></p>
         
-        <div>
-            <button id="publicChatViewBtn">Public Chat Room</button>
-            <button id="dmViewBtn">Direct Messages (DMs)</button>
+        <div style="margin-bottom: 10px;">
+            <a href="chat.html">Public Chat Room</a> | <a href="dm.html">Direct Messages (DMs)</a>
         </div>
 
-        <hr>
+        <h2>Public Chat Room</h2>
+        
+        <!-- Chat Box Feed -->
+        <div id="chatBox" style="border: 2px solid orange; background: #111; height: 400px; overflow-y: auto; padding: 10px; margin-bottom: 10px; font-family: monospace;"></div>
 
-        <div id="publicChatContainer">
-            <h2>Public Chat Room</h2>
-            <div id="chatBox" style="border: 1px solid black; height: 250px; overflow-y: scroll; margin-bottom: 10px; padding: 5px;"></div>
-
-            <form id="chatForm" style="position: relative;">
-                <input type="text" id="messageInput" placeholder="Type a public message or use @username..." autocomplete="off" required style="width: 300px; max-width: 100%;">
-                <input type="file" id="fileInput">
-                <button type="submit">Send Public</button>
-                <div id="chatAutocomplete" style="border: 1px solid black; background: white; position: absolute; display: none; max-height: 100px; overflow-y: auto; width: 300px;"></div>
-            </form>
-        </div>
-
-        <div id="dmContainer" style="display: none;">
-            <h2>Direct Messages</h2>
-            <div>
-                <strong>Online Users:</strong>
-                <ul id="onlineUsersList"></ul>
-            </div>
-
-            <hr>
-
-            <p>Currently messaging: <strong id="currentDmTarget">Select a user from above</strong></p>
-            <div id="dmBox" style="border: 1px solid black; height: 200px; overflow-y: scroll; margin-bottom: 10px; padding: 5px;"></div>
-
-            <form id="dmForm" style="position: relative;">
-                <input type="text" id="dmInput" placeholder="Type a private message..." autocomplete="off" required style="width: 300px; max-width: 100%;">
-                <button type="submit" id="sendDmBtn" disabled>Send DM</button>
-                <div id="dmAutocomplete" style="border: 1px solid black; background: white; position: absolute; display: none; max-height: 100px; overflow-y: auto; width: 300px;"></div>
-            </form>
-        </div>
+        <!-- Chat Input Form -->
+        <form id="chatForm">
+            <input type="text" id="chatInput" placeholder="Type a public message or use @username..." style="width: 400px; max-width: 100%;" required>
+            <input type="file" id="chatFileInput">
+            <button type="submit">Send Public</button>
+        </form>
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
         const socket = io();
         let username = localStorage.getItem('jabber_username') || '';
-        let selectedDmUser = '';
-        let knownUsers = [];
 
+        const mainSection = document.getElementById('main-section');
         const loginSection = document.getElementById('login-section');
-        const chatSection = document.getElementById('chat-section');
         const displayUsername = document.getElementById('displayUsername');
         const logoutBtn = document.getElementById('logoutBtn');
-        
-        const publicChatContainer = document.getElementById('publicChatContainer');
-        const dmContainer = document.getElementById('dmContainer');
-        const publicChatViewBtn = document.getElementById('publicChatViewBtn');
-        const dmViewBtn = document.getElementById('dmViewBtn');
-
-        const onlineUsersList = document.getElementById('onlineUsersList');
         const chatBox = document.getElementById('chatBox');
         const chatForm = document.getElementById('chatForm');
-        const messageInput = document.getElementById('messageInput');
-        const fileInput = document.getElementById('fileInput');
-        const chatAutocomplete = document.getElementById('chatAutocomplete');
+        const chatInput = document.getElementById('chatInput');
+        const chatFileInput = document.getElementById('chatFileInput');
 
-        const dmBox = document.getElementById('dmBox');
-        const dmForm = document.getElementById('dmForm');
-        const dmInput = document.getElementById('dmInput');
-        const sendDmBtn = document.getElementById('sendDmBtn');
-        const currentDmTarget = document.getElementById('currentDmTarget');
-        const dmAutocomplete = document.getElementById('dmAutocomplete');
-
-        const joinedSound = document.getElementById('joinedSound');
-        const leftSound = document.getElementById('leftSound');
-        const messageSound = document.getElementById('messageSound');
-        const sentSound = document.getElementById('sentSound');
-
-        if (username) {
+        if (!username) {
+            loginSection.style.display = 'block';
+            mainSection.style.display = 'none';
+        } else {
             displayUsername.textContent = username;
-            loginSection.style.display = 'none';
-            chatSection.style.display = 'block';
             socket.emit('register_user', username);
         }
 
@@ -111,143 +63,79 @@
             window.location.href = 'auth.html';
         });
 
-        publicChatViewBtn.addEventListener('click', () => {
-            publicChatContainer.style.display = 'block';
-            dmContainer.style.display = 'none';
-        });
-
-        dmViewBtn.addEventListener('click', () => {
-            publicChatContainer.style.display = 'none';
-            dmContainer.style.display = 'block';
-        });
-
-        socket.on('update_user_list', (users) => {
-            knownUsers = users;
-            onlineUsersList.innerHTML = '';
-            users.forEach(user => {
-                if (user !== username) {
-                    const li = document.createElement('li');
-                    li.innerHTML = `${escapeHTML(user)} <button onclick="selectDmUser('${escapeHTML(user)}')">Message DM</button>`;
-                    onlineUsersList.appendChild(li);
-                }
-            });
-        });
-
-        window.selectDmUser = function(targetUser) {
-            selectedDmUser = targetUser;
-            currentDmTarget.textContent = targetUser;
-            sendDmBtn.disabled = false;
-            dmBox.innerHTML += `<p><small>--- Started DM conversation with ${escapeHTML(targetUser)} ---</small></p>`;
-        };
-
+        // Listen for history and incoming messages
         socket.on('init_history', (data) => {
             chatBox.innerHTML = '';
-            data.messages.forEach(msg => appendMessage(msg, false));
+            data.messages.forEach(msg => appendMessage(msg));
         });
 
         socket.on('chat_message', (msg) => {
-            appendMessage(msg, true);
+            appendMessage(msg);
         });
 
-        socket.on('private_message', (dm) => {
-            if (dm.sender === username || dm.recipient === username) {
-                const dmElement = document.createElement('div');
-                dmElement.innerHTML = `<strong>[DM - ${dm.timestamp}] ${escapeHTML(dm.sender)} to ${escapeHTML(dm.recipient)}:</strong> ${escapeHTML(dm.text)}`;
-                dmBox.appendChild(dmElement);
-                dmBox.scrollTop = dmBox.scrollHeight;
+        // Admin Commands Handlers
+        socket.on('force_disconnect', (reason) => {
+            alert(reason);
+            localStorage.removeItem('jabber_username');
+            window.location.href = 'auth.html';
+        });
 
-                if (dm.sender !== username) {
-                    messageSound.currentTime = 0;
-                    messageSound.play().catch(() => {});
-                }
-            }
+        socket.on('banned_error', (msg) => {
+            alert(msg);
+            localStorage.removeItem('jabber_username');
+            window.location.href = 'auth.html';
+        });
+
+        socket.on('clear_chat', () => {
+            chatBox.innerHTML = '';
         });
 
         chatForm.addEventListener('submit', (e) => {
             e.preventDefault();
-            const text = messageInput.value;
-            const file = fileInput.files[0];
-            chatAutocomplete.style.display = 'none';
+            const text = chatInput.value;
+            const file = chatFileInput.files[0];
 
             if (!text.trim() && !file) return;
-
-            sentSound.currentTime = 0;
-            sentSound.play().catch(() => {});
 
             if (file) {
                 const reader = new FileReader();
                 reader.onload = function(event) {
-                    socket.emit('chat_message', {
-                        username: username,
-                        text: text,
-                        file: { name: file.name, type: file.type, data: event.target.result }
+                    socket.emit('chat_message', { 
+                        username, 
+                        text, 
+                        file: { name: file.name, type: file.type, data: event.target.result } 
                     });
-                    messageInput.value = '';
-                    fileInput.value = '';
+                    chatInput.value = '';
+                    chatFileInput.value = '';
                 };
                 reader.readAsDataURL(file);
             } else {
-                socket.emit('chat_message', { username: username, text: text, file: null });
-                messageInput.value = '';
+                socket.emit('chat_message', { username, text, file: null });
+                chatInput.value = '';
             }
         });
 
-        dmForm.addEventListener('submit', (e) => {
-            e.preventDefault();
-            const text = dmInput.value.trim();
-            dmAutocomplete.style.display = 'none';
-            if (text && selectedDmUser) {
-                sentSound.currentTime = 0;
-                sentSound.play().catch(() => {});
-
-                socket.emit('private_message', {
-                    sender: username,
-                    recipient: selectedDmUser,
-                    text: text
-                });
-                dmInput.value = '';
-            }
-        });
-
-        function appendMessage(msg, isNew) {
-            const messageElement = document.createElement('div');
+        function appendMessage(msg) {
+            const div = document.createElement('div');
+            div.style.marginBottom = '5px';
             
             if (msg.type === 'system') {
-                messageElement.style.fontStyle = 'italic';
-                messageElement.style.color = 'gray';
-                messageElement.innerHTML = `<em>[${msg.timestamp}] ${escapeHTML(msg.text)}</em>`;
-                chatBox.appendChild(messageElement);
-                chatBox.scrollTop = chatBox.scrollHeight;
-
-                if (isNew) {
-                    if (msg.text.includes('joined')) {
-                        joinedSound.currentTime = 0;
-                        joinedSound.play().catch(() => {});
-                    } else if (msg.text.includes('left')) {
-                        leftSound.currentTime = 0;
-                        leftSound.play().catch(() => {});
+                div.style.color = '#ffaa00';
+                div.innerHTML = `<em>[${msg.timestamp}] ${escapeHTML(msg.text)}</em>`;
+            } else {
+                let fileHTML = '';
+                if (msg.file) {
+                    if (msg.file.type.startsWith('image/')) {
+                        fileHTML = `<br><img src="${msg.file.data}" alt="${escapeHTML(msg.file.name)}" style="max-width: 200px; display: block; margin-top: 5px;">`;
+                    } else {
+                        fileHTML = `<br><a href="${msg.file.data}" download="${escapeHTML(msg.file.name)}">📎 Download ${escapeHTML(msg.file.name)}</a>`;
                     }
                 }
-                return;
+                div.innerHTML = `<span style="color: #888;">[${msg.timestamp}]</span> <strong style="color: #ff7700;">${escapeHTML(msg.username)}:</strong> ${escapeHTML(msg.text)}${fileHTML}`;
             }
-
-            let contentHTML = `<strong>[${msg.timestamp}] ${escapeHTML(msg.username)}:</strong> ${escapeHTML(msg.text)}`;
-            if (msg.file) {
-                if (msg.file.type.startsWith('image/')) {
-                    contentHTML += `<br><img src="${msg.file.data}" alt="${escapeHTML(msg.file.name)}" style="max-width: 200px; display: block; margin-top: 5px;">`;
-                } else {
-                    contentHTML += `<br><a href="${msg.file.data}" download="${escapeHTML(msg.file.name)}">📎 Download ${escapeHTML(msg.file.name)}</a>`;
-                }
-            }
-
-            messageElement.innerHTML = contentHTML;
-            chatBox.appendChild(messageElement);
+            
+            chatBox.appendChild(div);
             chatBox.scrollTop = chatBox.scrollHeight;
-
-            if (isNew && msg.username !== username) {
-                messageSound.currentTime = 0;
-                messageSound.play().catch(() => {});
-            }
         }
 
         function escapeHTML(str) {
