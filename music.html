@@ -12,13 +12,51 @@
 
     <h1>Music!!</h1>
 
-    <h2>Still Waiting by sum 41</h2>
-    <div>
-        <audio controls>
-            <source src="Still-Waiting.mp3" type="audio/mpeg">
-            Your browser does not support the audio element.
-        </audio>
+    <!-- Search Bar -->
+    <div style="margin-bottom: 20px;">
+        <input type="text" id="searchBar" placeholder="Search music..." onkeyup="filterMusic()" style="padding: 6px; width: 280px; max-width: 100%; font-size: 14px;">
     </div>
+
+    <!-- Song List Container -->
+    <div id="songList">
+        <div class="song-item">
+            <h2>Still Waiting by sum 41</h2>
+            <div>
+                <audio controls>
+                    <source src="Still-Waiting.mp3" type="audio/mpeg">
+                    Your browser does not support the audio element.
+                </audio>
+            </div>
+        </div>
+
+                <div class="song-item">
+            <h2>ispy by Lil Yachty</h2>
+            <div>
+                <audio controls>
+                    <source src="ispy.mp3" type="audio/mpeg">
+                    Your browser does not support the audio element.
+                </audio>
+            </div>
+        </div>
+
+        <!-- You can easily add more <div class="song-item"> blocks here later! -->
+    </div>
+
+    <script>
+        function filterMusic() {
+            const input = document.getElementById('searchBar').value.toLowerCase();
+            const songItems = document.getElementsByClassName('song-item');
+
+            for (let i = 0; i < songItems.length; i++) {
+                const title = songItems[i].getElementsByTagName('h2')[0].textContent.toLowerCase();
+                if (title.includes(input)) {
+                    songItems[i].style.display = '';
+                } else {
+                    songItems[i].style.display = 'none';
+                }
+            }
+        }
+    </script>
 
 </body>
 </html>
