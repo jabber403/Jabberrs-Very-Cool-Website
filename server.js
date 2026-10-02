@@ -10,13 +10,15 @@ const io = new Server(server, {
     maxHttpBufferSize: 10 * 1024 * 1024 // 10MB upload limit
 });
 
+// Trust proxy if behind Render/Cloudflare to grab real client IP
+app.set('trust proxy', true);
+
 app.use(express.static(path.join(__dirname)));
 app.use(express.json());
 
 const USERS_FILE = path.join(__dirname, 'users.json');
-const BANNED_FILE = path.join(__dirname, 'banned.json');
+const BANNED_FILE = path.join(__dirname, 'banned_ips.json'); // Stores banned IPs
 
-// Set your admin username here!
 const ADMIN_USERNAME = 'Jabberr';
 
 function loadUsers() {
@@ -25,54 +27,81 @@ function loadUsers() {
 }
 function saveUsers(users) { fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2)); }
 
-function loadBanned() {
+function loadBannedIPs() {
     if (!fs.existsSync(BANNED_FILE)) return [];
     try { return JSON.parse(fs.readFileSync(BANNED_FILE, 'utf8')); } catch (e) { return []; }
 }
-function saveBanned(banned) { fs.writeFileSync(BANNED_FILE, JSON.stringify(banned, null, 2)); }
+function saveBannedIPs(banned) { fs.writeFileSync(BANNED_FILE, JSON.stringify(banned, null, 2)); }
 
-// REST endpoints for Login and Signup
+// Helper to get client IP from socket or request
+function getClientIP(socket) {
+    const forwarded = socket.handshake.headers['x-forwarded-for'];
+    if (forwarded) {
+        return forwarded.split(',')[0].trim();
+    }
+    return socket.handshake.address;
+}
+
+// REST endpoints for Signup
 app.post('/api/signup', (req, res) => {
+    const clientIp = req.headers['x-forwarded-for'] ? req.headers['x-forwarded-for'].split(',')[0].trim() : req.ip;
+    const bannedIPs = loadBannedIPs();
+
+    if (bannedIPs.includes(clientIp)) {
+        return res.json({ success: false, message: 'Your IP address has been banned from this website.' });
+    }
+
     const { username, password } = req.body;
     if (!username || !password) return res.json({ success: false, message: 'Username and password required.' });
     const trimmed = username.trim();
-    
-    const banned = loadBanned();
-    if (banned.includes(trimmed.toLowerCase())) {
-        return res.json({ success: false, message: 'This username is banned from the website.' });
-    }
 
     const users = loadUsers();
     if (users[trimmed]) return res.json({ success: false, message: 'Username already exists.' });
-    users[trimmed] = { password: password, following: [], likes: [] };
+    users[trimmed] = { password: password, following: [], likes: [], ip: clientIp };
     saveUsers(users);
     return res.json({ success: true, username: trimmed });
 });
 
 app.post('/api/login', (req, res) => {
+    const clientIp = req.headers['x-forwarded-for'] ? req.headers['x-forwarded-for'].split(',')[0].trim() : req.ip;
+    const bannedIPs = loadBannedIPs();
+
+    if (bannedIPs.includes(clientIp)) {
+        return res.json({ success: false, message: 'Your IP address has been banned from this website.' });
+    }
+
     const { username, password } = req.body;
     if (!username || !password) return res.json({ success: false, message: 'Username and password required.' });
     const trimmed = username.trim();
-
-    const banned = loadBanned();
-    if (banned.includes(trimmed.toLowerCase())) {
-        return res.json({ success: false, message: 'This account has been banned.' });
-    }
 
     const users = loadUsers();
     if (!users[trimmed] || users[trimmed].password !== password) {
         return res.json({ success: false, message: 'Invalid username or password.' });
     }
+
+    // Update user's IP on login
+    users[trimmed].ip = clientIp;
+    saveUsers(users);
+
     return res.json({ success: true, username: trimmed });
 });
 
 let postHistory = [];
 let messageHistory = [];
 const MAX_HISTORY = 50;
-const connectedUsers = {}; // socket.id -> username
+const connectedUsers = {}; // socket.id -> { username, ip }
 
 io.on('connection', (socket) => {
-    console.log(`User connected: ${socket.id}`);
+    const clientIp = getClientIP(socket);
+    const bannedIPs = loadBannedIPs();
+
+    if (bannedIPs.includes(clientIp)) {
+        socket.emit('banned_error', 'Your IP address is banned from this chat.');
+        socket.disconnect(true);
+        return;
+    }
+
+    console.log(`User connected: ${socket.id} from IP: ${clientIp}`);
 
     socket.emit('init_history', { posts: postHistory, messages: messageHistory });
 
@@ -80,13 +109,20 @@ io.on('connection', (socket) => {
         if (!username) return;
         const trimmedName = username.trim();
 
-        const banned = loadBanned();
-        if (banned.includes(trimmedName.toLowerCase())) {
-            socket.emit('banned_error', 'You are banned from this chat.');
+        if (bannedIPs.includes(clientIp)) {
+            socket.emit('banned_error', 'Your IP address is banned.');
+            socket.disconnect(true);
             return;
         }
 
-        connectedUsers[socket.id] = trimmedName;
+        connectedUsers[socket.id] = { username: trimmedName, ip: clientIp };
+
+        // Save IP to user record if exists
+        const users = loadUsers();
+        if (users[trimmedName]) {
+            users[trimmedName].ip = clientIp;
+            saveUsers(users);
+        }
 
         const joinMsg = {
             id: Date.now() + Math.random(),
@@ -98,7 +134,7 @@ io.on('connection', (socket) => {
         if (messageHistory.length > MAX_HISTORY) messageHistory.shift();
         io.emit('chat_message', joinMsg);
 
-        io.emit('update_user_list', Object.values(connectedUsers));
+        io.emit('update_user_list', Object.values(connectedUsers).map(u => u.username));
         sendUserData(socket, trimmedName);
     });
 
@@ -108,37 +144,54 @@ io.on('connection', (socket) => {
         const text = data.text ? data.text.trim() : '';
         const file = data.file || null;
 
-        // Check for Admin Commands if sent by Jabberr
+        // Admin Commands check (Only works if sent by Jabberr)
         if (username.toLowerCase() === ADMIN_USERNAME.toLowerCase() && text.startsWith('/')) {
             const parts = text.split(' ');
             const command = parts[0].toLowerCase();
             const target = parts[1] ? parts[1].trim() : '';
 
             if (command === '/kick' && target) {
-                const targetSocketId = Object.keys(connectedUsers).find(
-                    key => connectedUsers[key].toLowerCase() === target.toLowerCase()
+                const targetEntry = Object.entries(connectedUsers).find(
+                    ([id, u]) => u.username.toLowerCase() === target.toLowerCase()
                 );
-                if (targetSocketId) {
+                if (targetEntry) {
+                    const [targetSocketId] = targetEntry;
                     io.to(targetSocketId).emit('force_disconnect', 'You have been kicked by the admin.');
-                    io.sockets.sockets.get(targetSocketId)?.disconnect();
+                    io.sockets.sockets.get(targetSocketId)?.disconnect(true);
                 }
                 sendSystemMessage(`⚠️ Admin kicked ${target}.`);
                 return;
             } 
             else if (command === '/ban' && target) {
-                const banned = loadBanned();
-                if (!banned.includes(target.toLowerCase())) {
-                    banned.push(target.toLowerCase());
-                    saveBanned(banned);
-                }
-                const targetSocketId = Object.keys(connectedUsers).find(
-                    key => connectedUsers[key].toLowerCase() === target.toLowerCase()
+                const bannedIPs = loadBannedIPs();
+                
+                // Find IP from connected users or users file
+                let targetIp = null;
+                const targetEntry = Object.entries(connectedUsers).find(
+                    ([id, u]) => u.username.toLowerCase() === target.toLowerCase()
                 );
-                if (targetSocketId) {
-                    io.to(targetSocketId).emit('force_disconnect', 'You have been permanently banned by the admin.');
-                    io.sockets.sockets.get(targetSocketId)?.disconnect();
+                if (targetEntry) {
+                    targetIp = targetEntry[1].ip;
+                } else {
+                    const users = loadUsers();
+                    if (users[target] && users[target].ip) {
+                        targetIp = users[target].ip;
+                    }
                 }
-                sendSystemMessage(`🔨 Admin permanently banned ${target}.`);
+
+                if (targetIp && !bannedIPs.includes(targetIp)) {
+                    bannedIPs.push(targetIp);
+                    saveBannedIPs(bannedIPs);
+                }
+
+                // Disconnect target socket if currently online
+                if (targetEntry) {
+                    const [targetSocketId] = targetEntry;
+                    io.to(targetSocketId).emit('force_disconnect', 'You have been permanently IP banned by the admin.');
+                    io.sockets.sockets.get(targetSocketId)?.disconnect(true);
+                }
+
+                sendSystemMessage(`🔨 Admin permanently IP banned ${target} (IP: ${targetIp || 'Unknown'}).`);
                 return;
             }
             else if (command === '/clear') {
@@ -165,7 +218,7 @@ io.on('connection', (socket) => {
 
     socket.on('private_message', (data) => {
         const recipientSocketId = Object.keys(connectedUsers).find(
-            key => connectedUsers[key] === data.recipient
+            key => connectedUsers[key].username === data.recipient
         );
         const dmData = {
             sender: data.sender,
@@ -257,7 +310,7 @@ io.on('connection', (socket) => {
         saveUsers(users);
         io.emit('update_post', post);
         
-        const targetSocketId = Object.keys(connectedUsers).find(key => connectedUsers[key] === username);
+        const targetSocketId = Object.keys(connectedUsers).find(key => connectedUsers[key].username === username);
         if (targetSocketId) {
             sendUserData(io.sockets.sockets.get(targetSocketId), username);
         }
@@ -309,15 +362,16 @@ io.on('connection', (socket) => {
         }
         saveUsers(users);
 
-        const followerSocketId = Object.keys(connectedUsers).find(key => connectedUsers[key] === follower);
+        const followerSocketId = Object.keys(connectedUsers).find(key => connectedUsers[key].username === follower);
         if (followerSocketId) {
             sendUserData(io.sockets.sockets.get(followerSocketId), follower);
         }
     });
 
     socket.on('disconnect', () => {
-        const leftName = connectedUsers[socket.id];
-        if (leftName) {
+        const userEntry = connectedUsers[socket.id];
+        if (userEntry) {
+            const leftName = userEntry.username;
             delete connectedUsers[socket.id];
             const leaveMsg = {
                 id: Date.now() + Math.random(),
@@ -328,7 +382,7 @@ io.on('connection', (socket) => {
             messageHistory.push(leaveMsg);
             if (messageHistory.length > MAX_HISTORY) messageHistory.shift();
             io.emit('chat_message', leaveMsg);
-            io.emit('update_user_list', Object.values(connectedUsers));
+            io.emit('update_user_list', Object.values(connectedUsers).map(u => u.username));
         }
         console.log(`User disconnected: ${socket.id}`);
     });

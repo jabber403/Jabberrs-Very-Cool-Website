@@ -20,7 +20,7 @@
         <p>Logged in as: <strong id="displayUsername"></strong> <button id="logoutBtn">Log Out</button></p>
         
         <div style="margin-bottom: 10px;">
-            <a href="chat.html">Public Chat Room</a> | <a href="dm.html">Direct Messages (DMs)</a>
+            <a href="chat.html">Public Chat Room</a> | <a href="dm.html">Direct Messages (DMs)</a> | <a href="jabberrsstuff.html">Post Feed</a>
         </div>
 
         <h2>Public Chat Room</h2>
@@ -63,7 +63,6 @@
             window.location.href = 'auth.html';
         });
 
-        // Listen for history and incoming messages
         socket.on('init_history', (data) => {
             chatBox.innerHTML = '';
             data.messages.forEach(msg => appendMessage(msg));
@@ -73,7 +72,6 @@
             appendMessage(msg);
         });
 
-        // Admin Commands Handlers
         socket.on('force_disconnect', (reason) => {
             alert(reason);
             localStorage.removeItem('jabber_username');
