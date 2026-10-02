@@ -159,13 +159,26 @@ io.on('connection', (socket) => {
         if (!post.likedBy) post.likedBy = [];
         if (!post.dislikedBy) post.dislikedBy = [];
 
+        // Track likes for current user to compute profile likes correctly
+        const users = loadUsers();
+        if (username && users[username]) {
+            if (!users[username].likes) users[username].likes = [];
+        }
+
         if (data.type === 'like') {
             if (post.likedBy.includes(username)) {
                 post.likedBy = post.likedBy.filter(u => u !== username);
                 post.likes = Math.max(0, post.likes - 1);
+                if (users[username] && users[username].likes) {
+                    users[username].likes = users[username].likes.filter(id => id !== post.id);
+                }
             } else {
                 post.likedBy.push(username);
                 post.likes++;
+                if (users[username]) {
+                    if (!users[username].likes) users[username].likes = [];
+                    if (!users[username].likes.includes(post.id)) users[username].likes.push(post.id);
+                }
                 if (post.dislikedBy.includes(username)) {
                     post.dislikedBy = post.dislikedBy.filter(u => u !== username);
                     post.dislikes = Math.max(0, post.dislikes - 1);
@@ -181,10 +194,15 @@ io.on('connection', (socket) => {
                 if (post.likedBy.includes(username)) {
                     post.likedBy = post.likedBy.filter(u => u !== username);
                     post.likes = Math.max(0, post.likes - 1);
+                    if (users[username] && users[username].likes) {
+                        users[username].likes = users[username].likes.filter(id => id !== post.id);
+                    }
                 }
             }
         }
+        saveUsers(users);
         io.emit('update_post', post);
+        if (username) sendUserData(socket, username);
     });
 
     socket.on('add_comment', (data) => {
@@ -195,10 +213,27 @@ io.on('connection', (socket) => {
             id: Date.now() + Math.random(),
             username: data.username ? data.username.trim() : 'Anonymous',
             text: data.text ? data.text.trim() : '',
+            replies: [],
             timestamp: new Date().toLocaleTimeString()
         };
         if (!commentData.text) return;
         post.comments.push(commentData);
+        io.emit('update_post', post);
+    });
+
+    socket.on('add_reply', (data) => {
+        const post = postHistory.find(p => p.id === data.postId);
+        if (!post || !post.comments || !post.comments[data.commentIndex]) return;
+        const comment = post.comments[data.commentIndex];
+        if (!comment.replies) comment.replies = [];
+        const replyData = {
+            id: Date.now() + Math.random(),
+            username: data.username ? data.username.trim() : 'Anonymous',
+            text: data.text ? data.text.trim() : '',
+            timestamp: new Date().toLocaleTimeString()
+        };
+        if (!replyData.text) return;
+        comment.replies.push(replyData);
         io.emit('update_post', post);
     });
 
@@ -242,7 +277,8 @@ function sendUserData(socket, username) {
     if (users[username]) {
         socket.emit('user_data', {
             username: username,
-            following: users[username].following || []
+            following: users[username].following || [],
+            likes: users[username].likes || []
         });
     }
 }
