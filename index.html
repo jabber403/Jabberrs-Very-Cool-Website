@@ -50,6 +50,14 @@
         <p>Halloween Update!!!</p>
     </div>
 
+    <!-- Halloween Music Player Section -->
+    <div style="margin: 20px 0; border: 2px dashed orange; padding: 15px; display: inline-block; background: #111; border-radius: 8px;">
+        <p style="margin-top: 0; color: orange;">🎵 Spooky Background Music</p>
+        <button id="musicToggleBtn" onclick="toggleHalloweenMusic()">▶ Play Halloween Music</button>
+    </div>
+    <!-- HALLOWEEN AUDIO ELEMENT -->
+    <audio id="halloweenAudio" src="Halloween.mp3" loop preload="auto"></audio>
+
     <h1 class="title-1">Jabberrs Socials:</h1>
     <div>
         <a href="https://www.youtube.com/@RetroJabberr">Jabberrs YouTube (Retro Jabberr)</a>
@@ -104,6 +112,27 @@
         function logout() {
             localStorage.removeItem('jabber_username');
             window.location.reload();
+        }
+
+        // Halloween Music Script
+        const halloweenAudio = document.getElementById('halloweenAudio');
+        const musicToggleBtn = document.getElementById('musicToggleBtn');
+        let isPlaying = false;
+
+        function toggleHalloweenMusic() {
+            if (!isPlaying) {
+                halloweenAudio.play().then(() => {
+                    isPlaying = true;
+                    musicToggleBtn.textContent = '⏸ Pause Halloween Music';
+                }).catch(e => {
+                    console.log('Autoplay or audio load failed:', e);
+                    alert('Could not play Halloween.mp3. Make sure the file is in the same folder!');
+                });
+            } else {
+                halloweenAudio.pause();
+                isPlaying = false;
+                musicToggleBtn.textContent = '▶ Play Halloween Music';
+            }
         }
     </script>
 </body>
