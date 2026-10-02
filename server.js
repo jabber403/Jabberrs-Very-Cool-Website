@@ -17,9 +17,9 @@ app.use(express.static(path.join(__dirname)));
 app.use(express.json());
 
 const USERS_FILE = path.join(__dirname, 'users.json');
-const BANNED_FILE = path.join(__dirname, 'banned_ips.json'); // Stores banned IPs
+const BANNED_FILE = path.join(__dirname, 'banned_ips.json');
 
-const ADMIN_USERNAME = 'Jabberr';
+const MASTER_ADMIN = 'Jabberr';
 
 function loadUsers() {
     if (!fs.existsSync(USERS_FILE)) return {};
@@ -33,7 +33,6 @@ function loadBannedIPs() {
 }
 function saveBannedIPs(banned) { fs.writeFileSync(BANNED_FILE, JSON.stringify(banned, null, 2)); }
 
-// Helper to get client IP cleanly
 function getClientIP(reqOrSocket) {
     let forwarded, address;
     if (reqOrSocket.headers) {
@@ -49,7 +48,6 @@ function getClientIP(reqOrSocket) {
     return address || '127.0.0.1';
 }
 
-// REST Middleware / Route Check for Banned IPs on Signup/Login
 app.post('/api/signup', (req, res) => {
     const clientIp = getClientIP(req);
     const bannedIPs = loadBannedIPs();
@@ -64,7 +62,10 @@ app.post('/api/signup', (req, res) => {
 
     const users = loadUsers();
     if (users[trimmed]) return res.json({ success: false, message: 'Username already exists.' });
-    users[trimmed] = { password: password, following: [], likes: [], ip: clientIp };
+    
+    // Auto-make Jabberr admin by default
+    const isAdmin = (trimmed.toLowerCase() === MASTER_ADMIN.toLowerCase());
+    users[trimmed] = { password: password, following: [], likes: [], ip: clientIp, isAdmin: isAdmin };
     saveUsers(users);
     return res.json({ success: true, username: trimmed });
 });
@@ -86,8 +87,10 @@ app.post('/api/login', (req, res) => {
         return res.json({ success: false, message: 'Invalid username or password.' });
     }
 
-    // Update IP on successful login
     users[trimmed].ip = clientIp;
+    if (trimmed.toLowerCase() === MASTER_ADMIN.toLowerCase()) {
+        users[trimmed].isAdmin = true;
+    }
     saveUsers(users);
 
     return res.json({ success: true, username: trimmed });
@@ -124,10 +127,12 @@ io.on('connection', (socket) => {
 
         connectedUsers[socket.id] = { username: trimmedName, ip: clientIp };
 
-        // Save IP to user record
         const users = loadUsers();
         if (users[trimmedName]) {
             users[trimmedName].ip = clientIp;
+            if (trimmedName.toLowerCase() === MASTER_ADMIN.toLowerCase()) {
+                users[trimmedName].isAdmin = true;
+            }
             saveUsers(users);
         }
 
@@ -145,43 +150,60 @@ io.on('connection', (socket) => {
         sendUserData(socket, trimmedName);
     });
 
-    // Chat handling & Admin Commands
+    // Chat handling & Extended Admin Commands
     socket.on('chat_message', (data) => {
         const username = data.username ? data.username.trim() : 'Anonymous';
         const text = data.text ? data.text.trim() : '';
         const file = data.file || null;
 
-        // Admin Commands check (Only works if sent by Jabberr)
-        if (username.toLowerCase() === ADMIN_USERNAME.toLowerCase() && text.startsWith('/')) {
-            const parts = text.split(' ');
-            const command = parts[0].toLowerCase();
-            const target = parts[1] ? parts[1].trim() : '';
+        // Check if user has admin privileges
+        const users = loadUsers();
+        const isMaster = username.toLowerCase() === MASTER_ADMIN.toLowerCase();
+        const userRecord = users[username];
+        const hasAdminRights = isMaster || (userRecord && userRecord.isAdmin);
 
-            if (command === '/kick' && target) {
+        if (hasAdminRights && text.startsWith('/')) {
+            // Parse multi-word commands cleanly
+            const parts = text.split(' ');
+            const cmd1 = parts[0] ? parts[0].toLowerCase() : '';
+            const cmd2 = parts[1] ? parts[1].toLowerCase() : '';
+
+            // 1. /kick [username]
+            if (cmd1 === '/kick') {
+                const target = cmd2.trim();
+                if (target.toLowerCase() === MASTER_ADMIN.toLowerCase()) {
+                    sendSystemMessage(`⚠️ Nice try! You cannot kick the master admin Jabberr.`);
+                    return;
+                }
                 const targetEntry = Object.entries(connectedUsers).find(
                     ([id, u]) => u.username.toLowerCase() === target.toLowerCase()
                 );
                 if (targetEntry) {
                     const [targetSocketId] = targetEntry;
-                    io.to(targetSocketId).emit('force_disconnect', 'You have been kicked by the admin.');
+                    io.to(targetSocketId).emit('force_disconnect', 'You have been kicked by an admin.');
                     io.sockets.sockets.get(targetSocketId)?.disconnect(true);
                 }
                 sendSystemMessage(`⚠️ Admin kicked ${target}.`);
                 return;
             } 
-            else if (command === '/ban' && target) {
+            
+            // 2. /ban [username]
+            else if (cmd1 === '/ban') {
+                const target = cmd2.trim();
+                if (target.toLowerCase() === MASTER_ADMIN.toLowerCase()) {
+                    sendSystemMessage(`🛡️ ERROR: Jabberr is immortal and cannot be banned! Nice try.`);
+                    return;
+                }
+
                 const bannedIPs = loadBannedIPs();
                 let targetIp = null;
 
-                // 1. Check currently connected users
                 const targetEntry = Object.entries(connectedUsers).find(
                     ([id, u]) => u.username.toLowerCase() === target.toLowerCase()
                 );
                 if (targetEntry) {
                     targetIp = targetEntry[1].ip;
                 } else {
-                    // 2. Fallback to users.json file records
-                    const users = loadUsers();
                     const foundUserKey = Object.keys(users).find(k => k.toLowerCase() === target.toLowerCase());
                     if (foundUserKey && users[foundUserKey].ip) {
                         targetIp = users[foundUserKey].ip;
@@ -193,17 +215,66 @@ io.on('connection', (socket) => {
                     saveBannedIPs(bannedIPs);
                 }
 
-                // Disconnect target socket instantly if online
                 if (targetEntry) {
                     const [targetSocketId] = targetEntry;
-                    io.to(targetSocketId).emit('force_ban', 'You have been permanently IP banned by the admin.');
+                    io.to(targetSocketId).emit('force_ban', 'You have been permanently IP banned by an admin.');
                     io.sockets.sockets.get(targetSocketId)?.disconnect(true);
                 }
 
                 sendSystemMessage(`🔨 Admin permanently IP banned ${target} (IP: ${targetIp || 'Unknown'}).`);
                 return;
             }
-            else if (command === '/clear') {
+
+            // 3. /get ip [username]
+            else if (cmd1 === '/get' && cmd2 === 'ip') {
+                const target = parts[2] ? parts[2].trim() : '';
+                if (!target) {
+                    sendSystemMessage(`⚠️ Usage: /get ip [username]`);
+                    return;
+                }
+
+                let targetIp = 'Not found';
+                const targetEntry = Object.entries(connectedUsers).find(
+                    ([id, u]) => u.username.toLowerCase() === target.toLowerCase()
+                );
+                if (targetEntry) {
+                    targetIp = targetEntry[1].ip;
+                } else {
+                    const foundUserKey = Object.keys(users).find(k => k.toLowerCase() === target.toLowerCase());
+                    if (foundUserKey && users[foundUserKey].ip) {
+                        targetIp = users[foundUserKey].ip;
+                    }
+                }
+
+                sendSystemMessage(`🔍 Admin Tool -> IP for ${target}: ${targetIp}`);
+                return;
+            }
+
+            // 4. /add admin [username] (Master Admin Only)
+            else if (cmd1 === '/add' && cmd2 === 'admin') {
+                if (!isMaster) {
+                    sendSystemMessage(`❌ Only the master admin Jabberr can promote new admins.`);
+                    return;
+                }
+                const target = parts[2] ? parts[2].trim() : '';
+                if (!target) {
+                    sendSystemMessage(`⚠️ Usage: /add admin [username]`);
+                    return;
+                }
+
+                const foundUserKey = Object.keys(users).find(k => k.toLowerCase() === target.toLowerCase());
+                if (foundUserKey) {
+                    users[foundUserKey].isAdmin = true;
+                    saveUsers(users);
+                    sendSystemMessage(`👑 Success! ${foundUserKey} has been promoted to Admin.`);
+                } else {
+                    sendSystemMessage(`❌ User '${target}' not found in database.`);
+                }
+                return;
+            }
+
+            // 5. /clear
+            else if (cmd1 === '/clear') {
                 messageHistory = [];
                 io.emit('clear_chat');
                 sendSystemMessage(`🧹 Admin cleared the chat history.`);
@@ -225,7 +296,6 @@ io.on('connection', (socket) => {
         io.emit('chat_message', messageData);
     });
 
-    // Restored DM Handling
     socket.on('private_message', (data) => {
         const recipientSocketId = Object.keys(connectedUsers).find(
             key => connectedUsers[key].username.toLowerCase() === (data.recipient || '').toLowerCase()
