@@ -78,10 +78,11 @@
             window.location.href = 'auth.html';
         });
 
-        socket.on('banned_error', (msg) => {
+        // BANNED FOREVER REDIRECTION HANDLER
+        socket.on('force_ban', (msg) => {
             alert(msg);
             localStorage.removeItem('jabber_username');
-            window.location.href = 'auth.html';
+            window.location.href = 'banned.html';
         });
 
         socket.on('clear_chat', () => {

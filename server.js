@@ -10,7 +10,7 @@ const io = new Server(server, {
     maxHttpBufferSize: 10 * 1024 * 1024 // 10MB upload limit
 });
 
-// Trust proxy if behind Render/Cloudflare to grab real client IP
+// Trust proxy if behind Render/Cloudflare/Heroku to grab real client IP
 app.set('trust proxy', true);
 
 app.use(express.static(path.join(__dirname)));
@@ -33,22 +33,29 @@ function loadBannedIPs() {
 }
 function saveBannedIPs(banned) { fs.writeFileSync(BANNED_FILE, JSON.stringify(banned, null, 2)); }
 
-// Helper to get client IP from socket or request
-function getClientIP(socket) {
-    const forwarded = socket.handshake.headers['x-forwarded-for'];
+// Helper to get client IP cleanly
+function getClientIP(reqOrSocket) {
+    let forwarded, address;
+    if (reqOrSocket.headers) {
+        forwarded = reqOrSocket.headers['x-forwarded-for'];
+        address = reqOrSocket.ip || reqOrSocket.connection?.remoteAddress;
+    } else if (reqOrSocket.handshake) {
+        forwarded = reqOrSocket.handshake.headers['x-forwarded-for'];
+        address = reqOrSocket.handshake.address;
+    }
     if (forwarded) {
         return forwarded.split(',')[0].trim();
     }
-    return socket.handshake.address;
+    return address || '127.0.0.1';
 }
 
-// REST endpoints for Signup
+// REST Middleware / Route Check for Banned IPs on Signup/Login
 app.post('/api/signup', (req, res) => {
-    const clientIp = req.headers['x-forwarded-for'] ? req.headers['x-forwarded-for'].split(',')[0].trim() : req.ip;
+    const clientIp = getClientIP(req);
     const bannedIPs = loadBannedIPs();
 
     if (bannedIPs.includes(clientIp)) {
-        return res.json({ success: false, message: 'Your IP address has been banned from this website.' });
+        return res.json({ success: false, banned: true, message: 'Your IP address is permanently banned from this website.' });
     }
 
     const { username, password } = req.body;
@@ -63,11 +70,11 @@ app.post('/api/signup', (req, res) => {
 });
 
 app.post('/api/login', (req, res) => {
-    const clientIp = req.headers['x-forwarded-for'] ? req.headers['x-forwarded-for'].split(',')[0].trim() : req.ip;
+    const clientIp = getClientIP(req);
     const bannedIPs = loadBannedIPs();
 
     if (bannedIPs.includes(clientIp)) {
-        return res.json({ success: false, message: 'Your IP address has been banned from this website.' });
+        return res.json({ success: false, banned: true, message: 'Your IP address is permanently banned from this website.' });
     }
 
     const { username, password } = req.body;
@@ -79,7 +86,7 @@ app.post('/api/login', (req, res) => {
         return res.json({ success: false, message: 'Invalid username or password.' });
     }
 
-    // Update user's IP on login
+    // Update IP on successful login
     users[trimmed].ip = clientIp;
     saveUsers(users);
 
@@ -96,7 +103,7 @@ io.on('connection', (socket) => {
     const bannedIPs = loadBannedIPs();
 
     if (bannedIPs.includes(clientIp)) {
-        socket.emit('banned_error', 'Your IP address is banned from this chat.');
+        socket.emit('force_ban', 'Your IP address is permanently banned.');
         socket.disconnect(true);
         return;
     }
@@ -109,15 +116,15 @@ io.on('connection', (socket) => {
         if (!username) return;
         const trimmedName = username.trim();
 
-        if (bannedIPs.includes(clientIp)) {
-            socket.emit('banned_error', 'Your IP address is banned.');
+        if (loadBannedIPs().includes(clientIp)) {
+            socket.emit('force_ban', 'Your IP address is permanently banned.');
             socket.disconnect(true);
             return;
         }
 
         connectedUsers[socket.id] = { username: trimmedName, ip: clientIp };
 
-        // Save IP to user record if exists
+        // Save IP to user record
         const users = loadUsers();
         if (users[trimmedName]) {
             users[trimmedName].ip = clientIp;
@@ -164,18 +171,20 @@ io.on('connection', (socket) => {
             } 
             else if (command === '/ban' && target) {
                 const bannedIPs = loadBannedIPs();
-                
-                // Find IP from connected users or users file
                 let targetIp = null;
+
+                // 1. Check currently connected users
                 const targetEntry = Object.entries(connectedUsers).find(
                     ([id, u]) => u.username.toLowerCase() === target.toLowerCase()
                 );
                 if (targetEntry) {
                     targetIp = targetEntry[1].ip;
                 } else {
+                    // 2. Fallback to users.json file records
                     const users = loadUsers();
-                    if (users[target] && users[target].ip) {
-                        targetIp = users[target].ip;
+                    const foundUserKey = Object.keys(users).find(k => k.toLowerCase() === target.toLowerCase());
+                    if (foundUserKey && users[foundUserKey].ip) {
+                        targetIp = users[foundUserKey].ip;
                     }
                 }
 
@@ -184,10 +193,10 @@ io.on('connection', (socket) => {
                     saveBannedIPs(bannedIPs);
                 }
 
-                // Disconnect target socket if currently online
+                // Disconnect target socket instantly if online
                 if (targetEntry) {
                     const [targetSocketId] = targetEntry;
-                    io.to(targetSocketId).emit('force_disconnect', 'You have been permanently IP banned by the admin.');
+                    io.to(targetSocketId).emit('force_ban', 'You have been permanently IP banned by the admin.');
                     io.sockets.sockets.get(targetSocketId)?.disconnect(true);
                 }
 
@@ -216,9 +225,10 @@ io.on('connection', (socket) => {
         io.emit('chat_message', messageData);
     });
 
+    // Restored DM Handling
     socket.on('private_message', (data) => {
         const recipientSocketId = Object.keys(connectedUsers).find(
-            key => connectedUsers[key].username === data.recipient
+            key => connectedUsers[key].username.toLowerCase() === (data.recipient || '').toLowerCase()
         );
         const dmData = {
             sender: data.sender,
