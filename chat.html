@@ -23,6 +23,12 @@
             <a href="jabberrsstuff.html">Post Feed</a> | <a href="games.html">🕹️ Arcade & Games</a>
         </div>
 
+        <!-- Extra Controls / Options Bar -->
+        <div style="margin-bottom: 10px; font-size: 13px;">
+            <label><input type="checkbox" id="autoScrollToggle" checked> 📌 Auto-scroll to bottom</label> | 
+            <button onclick="clearLocalChatView()" style="background: #333; color: #ff5555; border: 1px solid #ff5555; cursor: pointer; border-radius: 3px; font-size: 11px;">🗑️ Clear Screen</button>
+        </div>
+
         <!-- Room Switcher Tabs -->
         <div style="margin-bottom: 10px;">
             <button id="tabPublic" style="background: orange; font-weight: bold;" onclick="switchTab('public')">🌐 Public Chat Room</button>
@@ -64,7 +70,7 @@
         </div>
     </div>
 
-    <!-- AUDIO ELEMENTS -->
+    <!-- AUDIO SOUND EFFECTS -->
     <audio id="soundJoined" src="Joined.mp3" preload="auto"></audio>
     <audio id="soundLeft" src="Left.mp3" preload="auto"></audio>
     <audio id="soundMessage" src="Message.mp3" preload="auto"></audio>
@@ -105,6 +111,7 @@
         const chatInput = document.getElementById('chatInput');
         const chatFileInput = document.getElementById('chatFileInput');
         const typingIndicator = document.getElementById('typingIndicator');
+        const autoScrollToggle = document.getElementById('autoScrollToggle');
 
         const dmBox = document.getElementById('dmBox');
         const dmForm = document.getElementById('dmForm');
@@ -143,6 +150,10 @@
                 tabPublic.style.background = '';
                 updateDMRecipientDropdown();
             }
+        }
+
+        function clearLocalChatView() {
+            chatBox.innerHTML = '<em style="color: #666;">Screen cleared locally.</em>';
         }
 
         socket.on('init_history', (data) => {
@@ -197,6 +208,7 @@
             renderPublicChat();
         });
 
+        // Typing Indicator Triggers
         chatInput.addEventListener('input', () => {
             socket.emit('typing', { username: username });
             clearTimeout(typingTimeout);
@@ -288,7 +300,10 @@
                 }
                 chatBox.appendChild(div);
             });
-            chatBox.scrollTop = chatBox.scrollHeight;
+            
+            if (autoScrollToggle.checked) {
+                chatBox.scrollTop = chatBox.scrollHeight;
+            }
         }
 
         function deletePublicMessage(index) {
@@ -420,7 +435,10 @@
                 div.innerHTML = `<span style="color: #888;">[${msg.timestamp}]</span> <strong style="color: ${senderColor};">${escapeHTML(msg.sender)}:</strong> ${formatLinks(escapeHTML(msg.text))}${fileHTML}${dmActionButtons}`;
                 dmBox.appendChild(div);
             });
-            dmBox.scrollTop = dmBox.scrollHeight;
+            
+            if (autoScrollToggle.checked) {
+                dmBox.scrollTop = dmBox.scrollHeight;
+            }
         }
 
         function deleteDM(partner, index) {
