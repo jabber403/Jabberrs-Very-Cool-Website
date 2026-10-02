@@ -5,8 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Jabberrs Awesome Chat App!!</title>
     <link rel="stylesheet" href="style.css">
+    <style>
+        /* Party mode animation styles */
+        @keyframes partyColors {
+            0% { background-color: #111; color: #ff0000; }
+            20% { background-color: #220022; color: #00ff00; }
+            40% { background-color: #002222; color: #00ffff; }
+            60% { background-color: #222200; color: #ff00ff; }
+            80% { background-color: #220000; color: #ffff00; }
+            100% { background-color: #111; color: #ff7700; }
+        }
+        .party-mode {
+            animation: partyColors 4s infinite;
+        }
+    </style>
 </head>
-<body>
+<body id="pageBody">
 
     <a href="index.html">Back&lt;--</a>
     <h1 style="font-family: 'Comic Sans MS', cursive, sans-serif;">Jabberrs Awesome Chat App!!</h1>
@@ -21,6 +35,13 @@
         
         <div style="margin-bottom: 10px;">
             <a href="jabberrsstuff.html">Post Feed</a> | <a href="games.html">🕹️ Arcade & Games</a>
+        </div>
+
+        <!-- Theme & Party Mode Toggles -->
+        <div style="margin-bottom: 10px;">
+            <button onclick="togglePartyMode()" style="background: linear-gradient(to right, red, orange, yellow, green, blue, indigo, violet); color: white; font-weight: bold; border: 1px solid #fff; cursor: pointer;">🎉 Toggle Party Mode</button>
+            <button onclick="setTheme('dark')" style="background: #222; color: #fff;">Dark Theme</button>
+            <button onclick="setTheme('light')" style="background: #eee; color: #000;">Light Theme</button>
         </div>
 
         <!-- Room Switcher Tabs -->
@@ -69,6 +90,7 @@
     <audio id="soundLeft" src="Left.mp3" preload="auto"></audio>
     <audio id="soundMessage" src="Message.mp3" preload="auto"></audio>
     <audio id="soundSent" src="Sent.mp3" preload="auto"></audio>
+    <audio id="soundParty" src="music.html" preload="auto"></audio> <!-- Optional background music helper if used -->
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
@@ -85,8 +107,30 @@
             }
         }
 
+        // Party mode toggle handler
+        let isPartyActive = false;
+        function togglePartyMode() {
+            isPartyActive = !isPartyActive;
+            const body = document.getElementById('pageBody');
+            if (isPartyActive) {
+                body.classList.add('party-mode');
+            } else {
+                body.classList.remove('party-mode');
+            }
+        }
+
+        function setTheme(theme) {
+            if (theme === 'light') {
+                document.body.style.background = '#ffffff';
+                document.body.style.color = '#000000';
+            } else {
+                document.body.style.background = '#121212';
+                document.body.style.color = '#ffffff';
+            }
+        }
+
         const socket = io();
-        let username = localStorage.getItem('jabber_username') || ''; // Fixed parenthesis bug here!
+        let username = localStorage.getItem('jabber_username') || '';
         let isCurrentUserAdmin = false;
 
         const mainSection = document.getElementById('main-section');
