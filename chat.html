@@ -72,6 +72,7 @@
 
             <form id="dmForm">
                 <input type="text" id="dmInput" placeholder="Type a private whisper..." style="width: 400px; max-width: 100%;" required>
+                <input type="file" id="dmFileInput">
                 <button type="submit">Send DM</button>
             </form>
         </div>
@@ -94,7 +95,7 @@
             else if (type === 'sent') audioEl = document.getElementById('soundSent');
 
             if (audioEl) {
-                audioEl.currentTime = 0; // Rewind to start in case it's played rapidly
+                audioEl.currentTime = 0; 
                 audioEl.play().catch(e => console.log('Audio autoplay blocked or file missing:', e));
             }
         }
@@ -121,6 +122,7 @@
         const dmBox = document.getElementById('dmBox');
         const dmForm = document.getElementById('dmForm');
         const dmInput = document.getElementById('dmInput');
+        const dmFileInput = document.getElementById('dmFileInput');
         const dmRecipient = document.getElementById('dmRecipient');
 
         let onlineUsersList = [];
@@ -182,7 +184,7 @@
             document.body.classList.add('party-mode');
             setTimeout(() => {
                 document.body.classList.remove('party-mode');
-            }, 10000); // Party mode lasts 10 seconds
+            }, 10000); 
         });
 
         socket.on('update_user_list', (users) => {
@@ -236,10 +238,8 @@
 
             if (!text && !file) return;
 
-            // Clear typing state immediately on send
             socket.emit('typing', { username: '' });
 
-            // Check for party mode commands (/party or /party mode)
             const lowerText = text.toLowerCase();
             if (lowerText === '/party' || lowerText === '/party mode') {
                 socket.emit('party_mode_command');
@@ -320,20 +320,36 @@
             e.preventDefault();
             const recipient = dmRecipient.value;
             const text = dmInput.value.trim();
+            const file = dmFileInput.files[0];
 
             if (!recipient) {
                 alert('Please select a user to DM first!');
                 return;
             }
-            if (!text) return;
+            if (!text && !file) return;
 
-            socket.emit('private_message', {
-                sender: username,
-                recipient: recipient,
-                text: text
-            });
-
-            dmInput.value = '';
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    socket.emit('private_message', {
+                        sender: username,
+                        recipient: recipient,
+                        text: text,
+                        file: { name: file.name, type: file.type, data: event.target.result }
+                    });
+                    dmInput.value = '';
+                    dmFileInput.value = '';
+                };
+                reader.readAsDataURL(file);
+            } else {
+                socket.emit('private_message', {
+                    sender: username,
+                    recipient: recipient,
+                    text: text,
+                    file: null
+                });
+                dmInput.value = '';
+            }
         });
 
         socket.on('private_message', (data) => {
@@ -369,7 +385,28 @@
                 div.style.marginBottom = '5px';
                 const isMe = msg.sender === username;
                 const senderColor = isMe ? '#00ffff' : '#ff00ff';
-                div.innerHTML = `<span style="color: #888;">[${msg.timestamp}]</span> <strong style="color: ${senderColor};">${escapeHTML(msg.sender)}:</strong> ${escapeHTML(msg.text)}`;
+
+                let fileHTML = '';
+                if (msg.file) {
+                    const fType = msg.file.type;
+                    const fData = msg.file.data;
+                    const fName = escapeHTML(msg.file.name);
+                    
+                    if (fType.startsWith('image/')) {
+                        fileHTML = `<br><img src="${fData}" alt="${fName}" style="max-width: 250px; display: block; margin-top: 5px; border-radius: 4px;">
+                                    <br><a href="${fData}" download="${fName}" style="background: #333; color: cyan; padding: 2px 8px; text-decoration: none; border: 1px solid cyan; font-size: 11px; border-radius: 3px;">💾 Download ${fName}</a>`;
+                    } else if (fType.startsWith('video/')) {
+                        fileHTML = `<br><video controls style="max-width: 300px; display: block; margin-top: 5px;"><source src="${fData}" type="${fType}">Your browser does not support video.</video>
+                                    <br><a href="${fData}" download="${fName}" style="background: #333; color: cyan; padding: 2px 8px; text-decoration: none; border: 1px solid cyan; font-size: 11px; border-radius: 3px;">💾 Download ${fName}</a>`;
+                    } else if (fType.startsWith('audio/')) {
+                        fileHTML = `<br><audio controls style="margin-top: 5px;"><source src="${fData}" type="${fType}"></audio>
+                                    <br><a href="${fData}" download="${fName}" style="background: #333; color: cyan; padding: 2px 8px; text-decoration: none; border: 1px solid cyan; font-size: 11px; border-radius: 3px;">💾 Download ${fName}</a>`;
+                    } else {
+                        fileHTML = `<br><a href="${fData}" download="${fName}" style="background: #333; color: cyan; padding: 2px 8px; text-decoration: none; border: 1px solid cyan; font-size: 11px; border-radius: 3px;">💾 Download ${fName}</a>`;
+                    }
+                }
+
+                div.innerHTML = `<span style="color: #888;">[${msg.timestamp}]</span> <strong style="color: ${senderColor};">${escapeHTML(msg.sender)}:</strong> ${escapeHTML(msg.text)}${fileHTML}`;
                 dmBox.appendChild(div);
             });
             dmBox.scrollTop = dmBox.scrollHeight;
