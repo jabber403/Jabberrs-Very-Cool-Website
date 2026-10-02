@@ -20,20 +20,44 @@
         <p>Logged in as: <strong id="displayUsername"></strong> <button id="logoutBtn">Log Out</button></p>
         
         <div style="margin-bottom: 10px;">
-            <a href="chat.html">Public Chat Room</a> | <a href="dm.html">Direct Messages (DMs)</a> | <a href="jabberrsstuff.html">Post Feed</a>
+            <a href="jabberrsstuff.html">Post Feed</a>
         </div>
 
-        <h2>Public Chat Room</h2>
-        
-        <!-- Chat Box Feed -->
-        <div id="chatBox" style="border: 2px solid orange; background: #111; height: 400px; overflow-y: auto; padding: 10px; margin-bottom: 10px; font-family: monospace;"></div>
+        <!-- Room Switcher Tabs -->
+        <div style="margin-bottom: 10px;">
+            <button id="tabPublic" style="background: orange; font-weight: bold;" onclick="switchTab('public')">🌐 Public Chat Room</button>
+            <button id="tabDM" onclick="switchTab('dm')">💬 Private DMs</button>
+        </div>
 
-        <!-- Chat Input Form -->
-        <form id="chatForm">
-            <input type="text" id="chatInput" placeholder="Type a public message or use @username..." style="width: 400px; max-width: 100%;" required>
-            <input type="file" id="chatFileInput">
-            <button type="submit">Send Public</button>
-        </form>
+        <!-- PUBLIC CHAT VIEW -->
+        <div id="publicChatView">
+            <h2>Public Chat Room</h2>
+            <div id="chatBox" style="border: 2px solid orange; background: #111; height: 350px; overflow-y: auto; padding: 10px; margin-bottom: 10px; font-family: monospace;"></div>
+
+            <form id="chatForm">
+                <input type="text" id="chatInput" placeholder="Type a public message or use /ban [username]..." style="width: 400px; max-width: 100%;" required>
+                <input type="file" id="chatFileInput">
+                <button type="submit">Send Public</button>
+            </form>
+        </div>
+
+        <!-- DIRECT MESSAGE (DM) VIEW -->
+        <div id="dmView" style="display: none;">
+            <h2>Private Direct Messages</h2>
+            <div style="margin-bottom: 5px;">
+                <label for="dmRecipient">Whispering to:</label>
+                <select id="dmRecipient" style="padding: 3px;">
+                    <option value="">-- Select online user --</option>
+                </select>
+            </div>
+            
+            <div id="dmBox" style="border: 2px solid cyan; background: #111; height: 350px; overflow-y: auto; padding: 10px; margin-bottom: 10px; font-family: monospace;"></div>
+
+            <form id="dmForm">
+                <input type="text" id="dmInput" placeholder="Type a private whisper..." style="width: 400px; max-width: 100%;" required>
+                <button type="submit">Send DM</button>
+            </form>
+        </div>
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
@@ -45,10 +69,27 @@
         const loginSection = document.getElementById('login-section');
         const displayUsername = document.getElementById('displayUsername');
         const logoutBtn = document.getElementById('logoutBtn');
+
+        // Views & Tabs
+        const publicChatView = document.getElementById('publicChatView');
+        const dmView = document.getElementById('dmView');
+        const tabPublic = document.getElementById('tabPublic');
+        const tabDM = document.getElementById('tabDM');
+
+        // Public Chat Elements
         const chatBox = document.getElementById('chatBox');
         const chatForm = document.getElementById('chatForm');
         const chatInput = document.getElementById('chatInput');
         const chatFileInput = document.getElementById('chatFileInput');
+
+        // DM Elements
+        const dmBox = document.getElementById('dmBox');
+        const dmForm = document.getElementById('dmForm');
+        const dmInput = document.getElementById('dmInput');
+        const dmRecipient = document.getElementById('dmRecipient');
+
+        let onlineUsersList = [];
+        let dmConversations = {}; // stores history per user partner
 
         if (!username) {
             loginSection.style.display = 'block';
@@ -63,22 +104,44 @@
             window.location.href = 'auth.html';
         });
 
+        // Tab Switching Logic
+        function switchTab(tab) {
+            if (tab === 'public') {
+                publicChatView.style.display = 'block';
+                dmView.style.display = 'none';
+                tabPublic.style.background = 'orange';
+                tabDM.style.background = '';
+            } else {
+                publicChatView.style.display = 'none';
+                dmView.style.display = 'block';
+                tabDM.style.background = 'cyan';
+                tabPublic.style.background = '';
+                updateDMRecipientDropdown();
+            }
+        }
+
+        // Socket Listeners for Public Chat
         socket.on('init_history', (data) => {
             chatBox.innerHTML = '';
-            data.messages.forEach(msg => appendMessage(msg));
+            data.messages.forEach(msg => appendPublicMessage(msg));
         });
 
         socket.on('chat_message', (msg) => {
-            appendMessage(msg);
+            appendPublicMessage(msg);
         });
 
+        socket.on('update_user_list', (users) => {
+            onlineUsersList = users.filter(u => u !== username);
+            updateDMRecipientDropdown();
+        });
+
+        // Admin ban/kick events
         socket.on('force_disconnect', (reason) => {
             alert(reason);
             localStorage.removeItem('jabber_username');
             window.location.href = 'auth.html';
         });
 
-        // BANNED FOREVER REDIRECTION HANDLER
         socket.on('force_ban', (msg) => {
             alert(msg);
             localStorage.removeItem('jabber_username');
@@ -89,6 +152,7 @@
             chatBox.innerHTML = '';
         });
 
+        // Submit Public Message
         chatForm.addEventListener('submit', (e) => {
             e.preventDefault();
             const text = chatInput.value;
@@ -114,7 +178,7 @@
             }
         });
 
-        function appendMessage(msg) {
+        function appendPublicMessage(msg) {
             const div = document.createElement('div');
             div.style.marginBottom = '5px';
             
@@ -135,6 +199,76 @@
             
             chatBox.appendChild(div);
             chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        // Direct Message (DM) Handling
+        function updateDMRecipientDropdown() {
+            const currentSelected = dmRecipient.value;
+            dmRecipient.innerHTML = '<option value="">-- Select online user --</option>';
+            onlineUsersList.forEach(u => {
+                const opt = document.createElement('option');
+                opt.value = u;
+                opt.textContent = u;
+                if (u === currentSelected) opt.selected = true;
+                dmRecipient.appendChild(opt);
+            });
+        }
+
+        dmRecipient.addEventListener('change', () => {
+            renderDMBox();
+        });
+
+        dmForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const recipient = dmRecipient.value;
+            const text = dmInput.value.trim();
+
+            if (!recipient) {
+                alert('Please select a user to DM first!');
+                return;
+            }
+            if (!text) return;
+
+            socket.emit('private_message', {
+                sender: username,
+                recipient: recipient,
+                text: text
+            });
+
+            dmInput.value = '';
+        });
+
+        socket.on('private_message', (data) => {
+            const partner = (data.sender === username) ? data.recipient : data.sender;
+            if (!dmConversations[partner]) {
+                dmConversations[partner] = [];
+            }
+            dmConversations[partner].push(data);
+            renderDMBox();
+        });
+
+        function renderDMBox() {
+            const partner = dmRecipient.value;
+            dmBox.innerHTML = '';
+            if (!partner) {
+                dmBox.innerHTML = '<em style="color: #666;">Select a recipient above to start chatting privately.</em>';
+                return;
+            }
+            const history = dmConversations[partner] || [];
+            if (history.length === 0) {
+                dmBox.innerHTML = `<em style="color: #666;">No private messages with ${escapeHTML(partner)} yet. Say hello!</em>`;
+                return;
+            }
+
+            history.forEach(msg => {
+                const div = document.createElement('div');
+                div.style.marginBottom = '5px';
+                const isMe = msg.sender === username;
+                const senderColor = isMe ? '#00ffff' : '#ff00ff';
+                div.innerHTML = `<span style="color: #888;">[${msg.timestamp}]</span> <strong style="color: ${senderColor};">${escapeHTML(msg.sender)}:</strong> ${escapeHTML(msg.text)}`;
+                dmBox.appendChild(div);
+            });
+            dmBox.scrollTop = dmBox.scrollHeight;
         }
 
         function escapeHTML(str) {
