@@ -1,36 +1,40 @@
-h1, h2, h3, h5, h6, p {
-  color: crimson;
-  font-family: Impact, Haettenschweiler, 'Arial Narrow Bold', sans-serif;
+/* Load the Halloween font */
+@font-face {
+  font-family: 'Halloween';
+  src: url('Halloween.ttf') format('truetype');
 }
 
+/* Dark background and Halloween font, left-aligned */
 body {
-    background-color: black;
-    color: white; /* Optional: makes your text white so you can actually read it against the black background! */
+  background-color: #0d0d0d;
+  color: #ff5500;
+  font-family: 'Halloween', sans-serif;
 }
 
-/* This targets every <a> tag on your site */
+/* Style all <a> tags as glossy 3D Orange/Black Halloween buttons */
 a {
   position: relative;
   display: inline-block;
-  padding: 6px 14px;
-  font-family: inherit;
-  font-size: 13px;
+  padding: 8px 18px;
+  font-family: 'Halloween', sans-serif;
+  font-size: 16px;
   font-weight: bold;
-  color: #ffffff;
+  color: #000000;
   text-align: center;
   text-decoration: none;
   border-radius: 6px;
   cursor: pointer;
   
-  /* Compact red gradient matching your site's aesthetic */
-  background: linear-gradient(to bottom, #ff3333 0%, #990000 100%);
-  border: 1px solid #ff5555;
+  /* Fiery Orange Gradient */
+  background: linear-gradient(to bottom, #ff7700 0%, #cc3300 100%);
+  border: 1px solid #ff9933;
   box-shadow: 
-    0 3px 0 #550000, 
-    0 4px 8px rgba(0, 0, 0, 0.4);
+    0 4px 0 #331100, 
+    0 5px 10px rgba(0, 0, 0, 0.7);
   
   transition: all 0.1s ease;
   user-select: none;
+  margin: 4px;
 }
 
 /* Shiny glass reflection on top */
@@ -41,24 +45,24 @@ a::before {
   left: 2px;
   right: 2px;
   height: 45%;
-  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.05));
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.05));
   border-radius: 4px 4px 0 0;
   pointer-events: none;
 }
 
 /* Hover state */
 a:hover {
-  background: linear-gradient(to bottom, #ff4d4d, #b30000);
+  background: linear-gradient(to bottom, #ff881a, #e63900);
   transform: translateY(-1px);
   box-shadow: 
-    0 4px 0 #550000, 
-    0 5px 10px rgba(0, 0, 0, 0.5);
+    0 5px 0 #331100, 
+    0 6px 12px rgba(255, 102, 0, 0.4);
 }
 
 /* Active / Pressed state */
 a:active {
-  transform: translateY(2px);
+  transform: translateY(3px);
   box-shadow: 
-    0 1px 0 #550000, 
-    0 2px 4px rgba(0, 0, 0, 0.3);
+    0 1px 0 #331100, 
+    0 2px 5px rgba(0, 0, 0, 0.5);
 }
