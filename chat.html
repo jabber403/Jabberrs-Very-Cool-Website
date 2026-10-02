@@ -32,10 +32,13 @@
         <!-- PUBLIC CHAT VIEW -->
         <div id="publicChatView">
             <h2>Public Chat Room</h2>
-            <div id="chatBox" style="border: 2px solid orange; background: #111; height: 350px; overflow-y: auto; padding: 10px; margin-bottom: 10px; font-family: monospace;"></div>
+            <div id="chatBox" style="border: 2px solid orange; background: #111; height: 350px; overflow-y: auto; padding: 10px; margin-bottom: 5px; font-family: monospace;"></div>
+
+            <!-- Typing Indicator Display -->
+            <div id="typingIndicator" style="height: 20px; font-style: italic; color: #aaa; font-size: 13px; margin-bottom: 5px;"></div>
 
             <form id="chatForm">
-                <input type="text" id="chatInput" placeholder="Type a public message or /party mode..." style="width: 400px; max-width: 100%;" required>
+                <input type="text" id="chatInput" placeholder="Type a public message..." style="width: 400px; max-width: 100%;" required>
                 <input type="file" id="chatFileInput">
                 <button type="submit">Send Public</button>
             </form>
@@ -79,6 +82,7 @@
         const chatForm = document.getElementById('chatForm');
         const chatInput = document.getElementById('chatInput');
         const chatFileInput = document.getElementById('chatFileInput');
+        const typingIndicator = document.getElementById('typingIndicator');
 
         const dmBox = document.getElementById('dmBox');
         const dmForm = document.getElementById('dmForm');
@@ -87,6 +91,7 @@
 
         let onlineUsersList = [];
         let dmConversations = {};
+        let typingTimeout = null;
 
         if (!username) {
             loginSection.style.display = 'block';
@@ -146,9 +151,27 @@
             chatBox.innerHTML = '';
         });
 
-        // Trigger Party Mode for everyone!
-        socket.on('trigger_party', (data) => {
-            window.open(data.url, '_blank');
+        // Typing indicator events
+        chatInput.addEventListener('input', () => {
+            socket.emit('typing', { username: username });
+            
+            clearTimeout(typingTimeout);
+            typingTimeout = setTimeout(() => {
+                socket.emit('typing', { username: '' });
+            }, 1500);
+        });
+
+        let typingClearTimer = null;
+        socket.on('display_typing', (data) => {
+            if (data.username && data.username !== username) {
+                typingIndicator.textContent = `${data.username} is typing...`;
+                clearTimeout(typingClearTimer);
+                typingClearTimer = setTimeout(() => {
+                    typingIndicator.textContent = '';
+                }, 2000);
+            } else if (!data.username) {
+                typingIndicator.textContent = '';
+            }
         });
 
         chatForm.addEventListener('submit', (e) => {
@@ -157,6 +180,9 @@
             const file = chatFileInput.files[0];
 
             if (!text.trim() && !file) return;
+
+            // Clear typing state immediately on send
+            socket.emit('typing', { username: '' });
 
             if (file) {
                 const reader = new FileReader();

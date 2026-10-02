@@ -165,6 +165,11 @@ io.on('connection', (socket) => {
         sendUserData(socket, trimmedName);
     });
 
+    // Typing Indicator event
+    socket.on('typing', (data) => {
+        socket.broadcast.emit('display_typing', data);
+    });
+
     socket.on('chat_message', (data) => {
         const username = data.username ? data.username.trim() : 'Anonymous';
         const text = data.text ? data.text.trim() : '';
