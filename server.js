@@ -10,7 +10,6 @@ const io = new Server(server, {
     maxHttpBufferSize: 10 * 1024 * 1024 // 10MB upload limit
 });
 
-// Trust proxy if behind Render/Cloudflare/Heroku to grab real client IP
 app.set('trust proxy', true);
 
 app.use(express.static(path.join(__dirname)));
@@ -63,7 +62,6 @@ app.post('/api/signup', (req, res) => {
     const users = loadUsers();
     if (users[trimmed]) return res.json({ success: false, message: 'Username already exists.' });
     
-    // Auto-make Jabberr admin by default
     const isAdmin = (trimmed.toLowerCase() === MASTER_ADMIN.toLowerCase());
     users[trimmed] = { password: password, following: [], likes: [], ip: clientIp, isAdmin: isAdmin };
     saveUsers(users);
@@ -101,6 +99,21 @@ let messageHistory = [];
 const MAX_HISTORY = 50;
 const connectedUsers = {}; // socket.id -> { username, ip }
 
+function isUserAdmin(username) {
+    if (!username) return false;
+    if (username.toLowerCase() === MASTER_ADMIN.toLowerCase()) return true;
+    const users = loadUsers();
+    const foundKey = Object.keys(users).find(k => k.toLowerCase() === username.toLowerCase());
+    return foundKey ? !!users[foundKey].isAdmin : false;
+}
+
+function getConnectedUsersPayload() {
+    return Object.values(connectedUsers).map(u => ({
+        username: u.username,
+        isAdmin: isUserAdmin(u.username)
+    }));
+}
+
 io.on('connection', (socket) => {
     const clientIp = getClientIP(socket);
     const bannedIPs = loadBannedIPs();
@@ -110,8 +123,6 @@ io.on('connection', (socket) => {
         socket.disconnect(true);
         return;
     }
-
-    console.log(`User connected: ${socket.id} from IP: ${clientIp}`);
 
     socket.emit('init_history', { posts: postHistory, messages: messageHistory });
 
@@ -146,24 +157,18 @@ io.on('connection', (socket) => {
         if (messageHistory.length > MAX_HISTORY) messageHistory.shift();
         io.emit('chat_message', joinMsg);
 
-        io.emit('update_user_list', Object.values(connectedUsers).map(u => u.username));
+        io.emit('update_user_list', getConnectedUsersPayload());
         sendUserData(socket, trimmedName);
     });
 
-    // Chat handling & Extended Admin Commands
     socket.on('chat_message', (data) => {
         const username = data.username ? data.username.trim() : 'Anonymous';
         const text = data.text ? data.text.trim() : '';
         const file = data.file || null;
 
-        // Check if user has admin privileges
-        const users = loadUsers();
-        const isMaster = username.toLowerCase() === MASTER_ADMIN.toLowerCase();
-        const userRecord = users[username];
-        const hasAdminRights = isMaster || (userRecord && userRecord.isAdmin);
+        const hasAdminRights = isUserAdmin(username);
 
         if (hasAdminRights && text.startsWith('/')) {
-            // Parse multi-word commands cleanly
             const parts = text.split(' ');
             const cmd1 = parts[0] ? parts[0].toLowerCase() : '';
             const cmd2 = parts[1] ? parts[1].toLowerCase() : '';
@@ -195,6 +200,7 @@ io.on('connection', (socket) => {
                     return;
                 }
 
+                const users = loadUsers();
                 const bannedIPs = loadBannedIPs();
                 let targetIp = null;
 
@@ -233,6 +239,7 @@ io.on('connection', (socket) => {
                     return;
                 }
 
+                const users = loadUsers();
                 let targetIp = 'Not found';
                 const targetEntry = Object.entries(connectedUsers).find(
                     ([id, u]) => u.username.toLowerCase() === target.toLowerCase()
@@ -250,8 +257,9 @@ io.on('connection', (socket) => {
                 return;
             }
 
-            // 4. /add admin [username] (Master Admin Only)
+            // 4. /add admin [username]
             else if (cmd1 === '/add' && cmd2 === 'admin') {
+                const isMaster = username.toLowerCase() === MASTER_ADMIN.toLowerCase();
                 if (!isMaster) {
                     sendSystemMessage(`❌ Only the master admin Jabberr can promote new admins.`);
                     return;
@@ -262,18 +270,27 @@ io.on('connection', (socket) => {
                     return;
                 }
 
+                const users = loadUsers();
                 const foundUserKey = Object.keys(users).find(k => k.toLowerCase() === target.toLowerCase());
                 if (foundUserKey) {
                     users[foundUserKey].isAdmin = true;
                     saveUsers(users);
                     sendSystemMessage(`👑 Success! ${foundUserKey} has been promoted to Admin.`);
+                    io.emit('update_user_list', getConnectedUsersPayload());
                 } else {
                     sendSystemMessage(`❌ User '${target}' not found in database.`);
                 }
                 return;
             }
 
-            // 5. /clear
+            // 5. /party mode
+            else if (cmd1 === '/party' && cmd2 === 'mode') {
+                io.emit('trigger_party', { url: 'https://www.youtube.com/watch?v=aMyVyR64urY' });
+                sendSystemMessage(`🎉🥳 PARTY MODE ACTIVATED BY ADMIN! 🥳🎉`);
+                return;
+            }
+
+            // 6. /clear
             else if (cmd1 === '/clear') {
                 messageHistory = [];
                 io.emit('clear_chat');
@@ -286,6 +303,7 @@ io.on('connection', (socket) => {
             id: Date.now() + Math.random(),
             type: 'user',
             username: username,
+            isAdmin: hasAdminRights,
             text: text,
             file: file,
             timestamp: new Date().toLocaleTimeString()
@@ -462,9 +480,8 @@ io.on('connection', (socket) => {
             messageHistory.push(leaveMsg);
             if (messageHistory.length > MAX_HISTORY) messageHistory.shift();
             io.emit('chat_message', leaveMsg);
-            io.emit('update_user_list', Object.values(connectedUsers).map(u => u.username));
+            io.emit('update_user_list', getConnectedUsersPayload());
         }
-        console.log(`User disconnected: ${socket.id}`);
     });
 });
 
