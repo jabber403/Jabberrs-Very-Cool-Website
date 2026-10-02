@@ -63,51 +63,25 @@
         </div>
     </div>
 
+    <!-- AUDIO ELEMENTS -->
+    <audio id="soundJoined" src="Joined.mp3" preload="auto"></audio>
+    <audio id="soundLeft" src="Left.mp3" preload="auto"></audio>
+    <audio id="soundMessage" src="Message.mp3" preload="auto"></audio>
+    <audio id="soundSent" src="Sent.mp3" preload="auto"></audio>
+
     <script src="/socket.io/socket.io.js"></script>
     <script>
-        // --- SOUND EFFECTS (Web Audio API) ---
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-
+        // --- SOUND EFFECTS HANDLING ---
         function playSound(type) {
-            if (!audioCtx) return;
-            if (audioCtx.state === 'suspended') {
-                audioCtx.resume();
-            }
+            let audioEl = null;
+            if (type === 'joined') audioEl = document.getElementById('soundJoined');
+            else if (type === 'left') audioEl = document.getElementById('soundLeft');
+            else if (type === 'message') audioEl = document.getElementById('soundMessage');
+            else if (type === 'sent') audioEl = document.getElementById('soundSent');
 
-            const osc = audioCtx.createOscillator();
-            const gain = audioCtx.createGain();
-            osc.connect(gain);
-            gain.connect(audioCtx.destination);
-
-            const now = audioCtx.currentTime;
-
-            if (type === 'send') {
-                // Short high blip
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(587.33, now); // D5
-                osc.frequency.exponentialRampToValueAtTime(880, now + 0.1);
-                gain.gain.setValueAtTime(0.1, now);
-                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
-                osc.start(now);
-                osc.stop(now + 0.1);
-            } else if (type === 'receive') {
-                // Double chime
-                osc.type = 'triangle';
-                osc.frequency.setValueAtTime(440, now); // A4
-                osc.frequency.setValueAtTime(659.25, now + 0.08); // E5
-                gain.gain.setValueAtTime(0.12, now);
-                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
-                osc.start(now);
-                osc.stop(now + 0.2);
-            } else if (type === 'join') {
-                // Happy rising tone
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(300, now);
-                osc.frequency.exponentialRampToValueAtTime(600, now + 0.2);
-                gain.gain.setValueAtTime(0.1, now);
-                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
-                osc.start(now);
-                osc.stop(now + 0.2);
+            if (audioEl) {
+                audioEl.currentTime = 0; // Rewind to start in case it's played rapidly
+                audioEl.play().catch(e => console.log('Audio autoplay blocked or file missing:', e));
             }
         }
 
@@ -169,18 +143,23 @@
 
         socket.on('init_history', (data) => {
             chatBox.innerHTML = '';
-            data.messages.forEach(msg => appendPublicMessage(msg, false));
+            data.messages.forEach(msg => appendPublicMessage(msg));
         });
 
         socket.on('chat_message', (msg) => {
             const isSelf = msg.username === username;
-            appendPublicMessage(msg, true);
+            appendPublicMessage(msg);
+
             if (msg.type === 'system') {
-                playSound('join');
+                if (msg.text.includes('joined')) {
+                    playSound('joined');
+                } else if (msg.text.includes('left')) {
+                    playSound('left');
+                }
             } else if (isSelf) {
-                playSound('send');
+                playSound('sent');
             } else {
-                playSound('receive');
+                playSound('message');
             }
         });
 
@@ -256,7 +235,7 @@
             }
         });
 
-        function appendPublicMessage(msg, playSoundFlag) {
+        function appendPublicMessage(msg) {
             const div = document.createElement('div');
             div.style.marginBottom = '5px';
             
@@ -324,10 +303,11 @@
             }
             dmConversations[partner].push(data);
             renderDMBox();
+            
             if (data.sender === username) {
-                playSound('send');
+                playSound('sent');
             } else {
-                playSound('receive');
+                playSound('message');
             }
         });
 
