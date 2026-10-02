@@ -239,8 +239,9 @@
             // Clear typing state immediately on send
             socket.emit('typing', { username: '' });
 
-            // Check for party mode command
-            if (text === '/party') {
+            // Check for party mode commands (/party or /party mode)
+            const lowerText = text.toLowerCase();
+            if (lowerText === '/party' || lowerText === '/party mode') {
                 socket.emit('party_mode_command');
                 chatInput.value = '';
                 return;
@@ -285,7 +286,7 @@
                         fileHTML = `<br><video controls style="max-width: 300px; display: block; margin-top: 5px;"><source src="${fData}" type="${fType}">Your browser does not support video.</video>
                                     <br><a href="${fData}" download="${fName}" style="background: #333; color: orange; padding: 2px 8px; text-decoration: none; border: 1px solid orange; font-size: 11px; border-radius: 3px;">💾 Download ${fName}</a>`;
                     } else if (fType.startsWith('audio/')) {
-                        fileHTML = `<br><audio controls style="margin-top: 5px;"><source src="${fData}" type="${fType}">Your browser does not support audio.</audio>
+                        fileHTML = `<br><audio controls style="margin-top: 5px;"><source src="${fData}" type="${fType}"></audio>
                                     <br><a href="${fData}" download="${fName}" style="background: #333; color: orange; padding: 2px 8px; text-decoration: none; border: 1px solid orange; font-size: 11px; border-radius: 3px;">💾 Download ${fName}</a>`;
                     } else {
                         fileHTML = `<br><a href="${fData}" download="${fName}" style="background: #333; color: orange; padding: 2px 8px; text-decoration: none; border: 1px solid orange; font-size: 11px; border-radius: 3px;">💾 Download ${fName}</a>`;
