@@ -5,6 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Jabberrs Awesome Chat App!!</title>
     <link rel="stylesheet" href="style.css">
+    <style>
+        @keyframes rainbowBackground {
+            0% { background-color: #ff0000; }
+            16% { background-color: #ff7f00; }
+            33% { background-color: #ffff00; }
+            50% { background-color: #00ff00; }
+            66% { background-color: #0000ff; }
+            83% { background-color: #4b0082; }
+            100% { background-color: #8b00ff; }
+        }
+        body.party-mode {
+            animation: rainbowBackground 3s infinite;
+        }
+    </style>
 </head>
 <body>
 
@@ -17,7 +31,7 @@
     </div>
 
     <div id="main-section">
-        <p>Logged in as: <strong id="displayUsername"></strong> <span id="adminBadgeIndicator" style="display:none; background: red; color: white; padding: 1px 4px; font-size: 10px; border-radius: 3px; font-weight: bold;">[ADMIN]</span> <button id="logoutBtn">Log Out</button></p>
+        <p>Logged in as: <strong id="displayUsername"></strong> <button id="logoutBtn">Log Out</button></p>
         
         <div style="margin-bottom: 10px;">
             <a href="jabberrsstuff.html">Post Feed</a> | <a href="games.html">🕹️ Arcade & Games</a>
@@ -38,7 +52,7 @@
             <div id="typingIndicator" style="height: 20px; font-style: italic; color: #aaa; font-size: 13px; margin-bottom: 5px;"></div>
 
             <form id="chatForm">
-                <input type="text" id="chatInput" placeholder="Type a public message..." style="width: 400px; max-width: 100%;" required>
+                <input type="text" id="chatInput" placeholder="Type a public message or /party..." style="width: 400px; max-width: 100%;" required>
                 <input type="file" id="chatFileInput">
                 <button type="submit">Send Public</button>
             </form>
@@ -72,6 +86,7 @@
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
+        // --- SOUND EFFECTS HANDLING ---
         function playSound(type) {
             let audioEl = null;
             if (type === 'joined') audioEl = document.getElementById('soundJoined');
@@ -87,12 +102,10 @@
 
         const socket = io();
         let username = localStorage.getItem('jabber_username') || '';
-        let isCurrentUserAdmin = false;
 
         const mainSection = document.getElementById('main-section');
         const loginSection = document.getElementById('login-section');
         const displayUsername = document.getElementById('displayUsername');
-        const adminBadgeIndicator = document.getElementById('adminBadgeIndicator');
         const logoutBtn = document.getElementById('logoutBtn');
 
         const publicChatView = document.getElementById('publicChatView');
@@ -113,8 +126,8 @@
         const dmRecipient = document.getElementById('dmRecipient');
 
         let onlineUsersList = [];
+        // Load saved DM conversations from localStorage if available
         let dmConversations = JSON.parse(localStorage.getItem('jabber_dm_history') || '{}');
-        let publicMessagesList = [];
         let typingTimeout = null;
 
         if (!username) {
@@ -146,18 +159,20 @@
         }
 
         socket.on('init_history', (data) => {
-            publicMessagesList = data.messages || [];
-            renderPublicChat();
+            chatBox.innerHTML = '';
+            data.messages.forEach(msg => appendPublicMessage(msg));
         });
 
         socket.on('chat_message', (msg) => {
-            publicMessagesList.push(msg);
-            renderPublicChat();
-
             const isSelf = msg.username === username;
+            appendPublicMessage(msg);
+
             if (msg.type === 'system') {
-                if (msg.text.includes('joined')) playSound('joined');
-                else if (msg.text.includes('left')) playSound('left');
+                if (msg.text.includes('joined')) {
+                    playSound('joined');
+                } else if (msg.text.includes('left')) {
+                    playSound('left');
+                }
             } else if (isSelf) {
                 playSound('sent');
             } else {
@@ -165,19 +180,15 @@
             }
         });
 
-        // Listen for message updates/deletions from server
-        socket.on('update_public_messages', (messages) => {
-            publicMessagesList = messages;
-            renderPublicChat();
+        socket.on('trigger_party_mode', () => {
+            document.body.classList.add('party-mode');
+            setTimeout(() => {
+                document.body.classList.remove('party-mode');
+            }, 10000); 
         });
 
         socket.on('update_user_list', (users) => {
             onlineUsersList = users.filter(u => u.username !== username);
-            const currentMe = users.find(u => u.username === username);
-            if (currentMe && currentMe.isAdmin) {
-                isCurrentUserAdmin = true;
-                adminBadgeIndicator.style.display = 'inline-block';
-            }
             updateDMRecipientDropdown();
         });
 
@@ -194,12 +205,12 @@
         });
 
         socket.on('clear_chat', () => {
-            publicMessagesList = [];
-            renderPublicChat();
+            chatBox.innerHTML = '';
         });
 
         chatInput.addEventListener('input', () => {
             socket.emit('typing', { username: username });
+            
             clearTimeout(typingTimeout);
             typingTimeout = setTimeout(() => {
                 socket.emit('typing', { username: '' });
@@ -225,7 +236,15 @@
             const file = chatFileInput.files[0];
 
             if (!text && !file) return;
+
             socket.emit('typing', { username: '' });
+
+            const lowerText = text.toLowerCase();
+            if (lowerText === '/party' || lowerText === '/party mode') {
+                socket.emit('party_mode_command');
+                chatInput.value = '';
+                return;
+            }
 
             if (file) {
                 const reader = new FileReader();
@@ -245,66 +264,39 @@
             }
         });
 
-        function renderPublicChat() {
-            chatBox.innerHTML = '';
-            publicMessagesList.forEach((msg, index) => {
-                const div = document.createElement('div');
-                div.style.marginBottom = '5px';
-                
-                if (msg.type === 'system') {
-                    div.style.color = '#ffaa00';
-                    div.innerHTML = `<em>[${msg.timestamp}] ${escapeHTML(msg.text)}</em>`;
-                } else {
-                    let fileHTML = '';
-                    if (msg.file) {
-                        const fType = msg.file.type;
-                        const fData = msg.file.data;
-                        const fName = escapeHTML(msg.file.name);
-                        
-                        if (fType.startsWith('image/')) {
-                            fileHTML = `<br><img src="${fData}" alt="${fName}" style="max-width: 250px; display: block; margin-top: 5px; border-radius: 4px;">
-                                        <br><a href="${fData}" download="${fName}" style="background: #333; color: orange; padding: 2px 8px; text-decoration: none; border: 1px solid orange; font-size: 11px; border-radius: 3px;">💾 Download ${fName}</a>`;
-                        } else if (fType.startsWith('video/')) {
-                            fileHTML = `<br><video controls style="max-width: 300px; display: block; margin-top: 5px;"><source src="${fData}" type="${fType}">Your browser does not support video.</video>
-                                        <br><a href="${fData}" download="${fName}" style="background: #333; color: orange; padding: 2px 8px; text-decoration: none; border: 1px solid orange; font-size: 11px; border-radius: 3px;">💾 Download ${fName}</a>`;
-                        } else if (fType.startsWith('audio/')) {
-                            fileHTML = `<br><audio controls style="margin-top: 5px;"><source src="${fData}" type="${fType}"></audio>
-                                        <br><a href="${fData}" download="${fName}" style="background: #333; color: orange; padding: 2px 8px; text-decoration: none; border: 1px solid orange; font-size: 11px; border-radius: 3px;">💾 Download ${fName}</a>`;
-                        } else {
-                            fileHTML = `<br><a href="${fData}" download="${fName}" style="background: #333; color: orange; padding: 2px 8px; text-decoration: none; border: 1px solid orange; font-size: 11px; border-radius: 3px;">💾 Download ${fName}</a>`;
-                        }
-                    }
-
-                    const adminBadge = msg.isAdmin ? ` <span style="background: red; color: white; padding: 1px 4px; font-size: 10px; border-radius: 3px; font-weight: bold;">[ADMIN]</span>` : '';
+        function appendPublicMessage(msg) {
+            const div = document.createElement('div');
+            div.style.marginBottom = '5px';
+            
+            if (msg.type === 'system') {
+                div.style.color = '#ffaa00';
+                div.innerHTML = `<em>[${msg.timestamp}] ${escapeHTML(msg.text)}</em>`;
+            } else {
+                let fileHTML = '';
+                if (msg.file) {
+                    const fType = msg.file.type;
+                    const fData = msg.file.data;
+                    const fName = escapeHTML(msg.file.name);
                     
-                    // Check permissions for Edit/Delete buttons
-                    let actionButtons = '';
-                    if (msg.username === username || isCurrentUserAdmin) {
-                        actionButtons = ` <span style="margin-left: 10px;">
-                            <button onclick="editPublicMessage(${index})" style="background: #444; color: #ffaa00; border: 1px solid #ffaa00; font-size: 10px; cursor: pointer; border-radius: 3px;">Edit</button>
-                            <button onclick="deletePublicMessage(${index})" style="background: #444; color: #ff5555; border: 1px solid #ff5555; font-size: 10px; cursor: pointer; border-radius: 3px;">Delete</button>
-                        </span>`;
+                    if (fType.startsWith('image/')) {
+                        fileHTML = `<br><img src="${fData}" alt="${fName}" style="max-width: 250px; display: block; margin-top: 5px; border-radius: 4px;">
+                                    <br><a href="${fData}" download="${fName}" style="background: #333; color: orange; padding: 2px 8px; text-decoration: none; border: 1px solid orange; font-size: 11px; border-radius: 3px;">💾 Download ${fName}</a>`;
+                    } else if (fType.startsWith('video/')) {
+                        fileHTML = `<br><video controls style="max-width: 300px; display: block; margin-top: 5px;"><source src="${fData}" type="${fType}">Your browser does not support video.</video>
+                                    <br><a href="${fData}" download="${fName}" style="background: #333; color: orange; padding: 2px 8px; text-decoration: none; border: 1px solid orange; font-size: 11px; border-radius: 3px;">💾 Download ${fName}</a>`;
+                    } else if (fType.startsWith('audio/')) {
+                        fileHTML = `<br><audio controls style="margin-top: 5px;"><source src="${fData}" type="${fType}"></audio>
+                                    <br><a href="${fData}" download="${fName}" style="background: #333; color: orange; padding: 2px 8px; text-decoration: none; border: 1px solid orange; font-size: 11px; border-radius: 3px;">💾 Download ${fName}</a>`;
+                    } else {
+                        fileHTML = `<br><a href="${fData}" download="${fName}" style="background: #333; color: orange; padding: 2px 8px; text-decoration: none; border: 1px solid orange; font-size: 11px; border-radius: 3px;">💾 Download ${fName}</a>`;
                     }
-
-                    div.innerHTML = `<span style="color: #888;">[${msg.timestamp}]</span> <strong style="color: #ff7700;">${escapeHTML(msg.username)}</strong>${adminBadge}: <span id="pub-msg-text-${index}">${formatLinks(escapeHTML(msg.text))}</span>${fileHTML}${actionButtons}`;
                 }
-                chatBox.appendChild(div);
-            });
+                const adminBadge = msg.isAdmin ? ` <span style="background: red; color: white; padding: 1px 4px; font-size: 10px; border-radius: 3px; font-weight: bold;">[ADMIN]</span>` : '';
+                div.innerHTML = `<span style="color: #888;">[${msg.timestamp}]</span> <strong style="color: #ff7700;">${escapeHTML(msg.username)}</strong>${adminBadge}: ${formatLinks(escapeHTML(msg.text))}${fileHTML}`;
+            }
+            
+            chatBox.appendChild(div);
             chatBox.scrollTop = chatBox.scrollHeight;
-        }
-
-        function deletePublicMessage(index) {
-            if (confirm("Are you sure you want to delete this message?")) {
-                socket.emit('delete_public_message', { index, username, isAdmin: isCurrentUserAdmin });
-            }
-        }
-
-        function editPublicMessage(index) {
-            const msg = publicMessagesList[index];
-            const newText = prompt("Edit your message:", msg.text);
-            if (newText !== null && newText.trim() !== "") {
-                socket.emit('edit_public_message', { index, newText: newText.trim(), username, isAdmin: isCurrentUserAdmin });
-            }
         }
 
         function updateDMRecipientDropdown() {
@@ -365,11 +357,17 @@
                 dmConversations[partner] = [];
             }
             dmConversations[partner].push(data);
+            
+            // Save updated DM history to localStorage
             localStorage.setItem('jabber_dm_history', JSON.stringify(dmConversations));
+
             renderDMBox();
             
-            if (data.sender === username) playSound('sent');
-            else playSound('message');
+            if (data.sender === username) {
+                playSound('sent');
+            } else {
+                playSound('message');
+            }
         });
 
         function renderDMBox() {
@@ -385,7 +383,7 @@
                 return;
             }
 
-            history.forEach((msg, index) => {
+            history.forEach(msg => {
                 const div = document.createElement('div');
                 div.style.marginBottom = '5px';
                 const isMe = msg.sender === username;
@@ -411,38 +409,10 @@
                     }
                 }
 
-                let dmActionButtons = '';
-                if (msg.sender === username || isCurrentUserAdmin) {
-                    dmActionButtons = ` <span style="margin-left: 10px;">
-                        <button onclick="editDM('${partner}', ${index})" style="background: #444; color: #00ffff; border: 1px solid #00ffff; font-size: 10px; cursor: pointer; border-radius: 3px;">Edit</button>
-                        <button onclick="deleteDM('${partner}', ${index})" style="background: #444; color: #ff5555; border: 1px solid #ff5555; font-size: 10px; cursor: pointer; border-radius: 3px;">Delete</button>
-                    </span>`;
-                }
-
-                div.innerHTML = `<span style="color: #888;">[${msg.timestamp}]</span> <strong style="color: ${senderColor};">${escapeHTML(msg.sender)}:</strong> ${formatLinks(escapeHTML(msg.text))}${fileHTML}${dmActionButtons}`;
+                div.innerHTML = `<span style="color: #888;">[${msg.timestamp}]</span> <strong style="color: ${senderColor};">${escapeHTML(msg.sender)}:</strong> ${formatLinks(escapeHTML(msg.text))}${fileHTML}`;
                 dmBox.appendChild(div);
             });
             dmBox.scrollTop = dmBox.scrollHeight;
-        }
-
-        function deleteDM(partner, index) {
-            if (confirm("Delete this DM?")) {
-                if (dmConversations[partner]) {
-                    dmConversations[partner].splice(index, 1);
-                    localStorage.setItem('jabber_dm_history', JSON.stringify(dmConversations));
-                    renderDMBox();
-                }
-            }
-        }
-
-        function editDM(partner, index) {
-            const msg = dmConversations[partner][index];
-            const newText = prompt("Edit your private message:", msg.text);
-            if (newText !== null && newText.trim() !== "") {
-                msg.text = newText.trim();
-                localStorage.setItem('jabber_dm_history', JSON.stringify(dmConversations));
-                renderDMBox();
-            }
         }
 
         function escapeHTML(str) {
@@ -452,6 +422,7 @@
             );
         }
 
+        // Helper function to turn URLs into clickable links
         function formatLinks(text) {
             const urlRegex = /(https?:\/\/[^\s]+)/g;
             return text.replace(urlRegex, function(url) {
