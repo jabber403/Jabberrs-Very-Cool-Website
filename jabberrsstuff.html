@@ -2,11 +2,11 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Post Feed</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-
-<link rel="stylesheet" href="style.css">
 
     <a href="index.html">Back&lt;--</a>
     <h1 style="font-family: 'Comic Sans MS', cursive, sans-serif;">Post Feed</h1>
@@ -23,14 +23,14 @@
 
         <h2>Create a Post</h2>
         <form id="postForm" style="position: relative;">
-            <textarea id="postInput" placeholder="What's on your mind? Use @username..." rows="3" cols="40" required></textarea><br>
+            <textarea id="postInput" placeholder="What's on your mind? Use @username..." rows="3" cols="40" required style="max-width: 100%;"></textarea><br>
             <input type="file" id="postFileInput"><br>
             <button type="submit">Publish Post</button>
             <div id="postAutocomplete" style="border: 1px solid black; background: white; position: absolute; display: none; max-height: 100px; overflow-y: auto; width: 300px;"></div>
         </form>
 
         <h2>Feed</h2>
-        <input type="text" id="searchInput" placeholder="Search posts by keyword or user..." style="width: 300px; margin-bottom: 10px;"><br>
+        <input type="text" id="searchInput" placeholder="Search posts by keyword or user..." style="width: 300px; max-width: 100%; margin-bottom: 10px;"><br>
         
         <label><input type="checkbox" id="followingFilter"> Show Following Only</label><br><br>
 

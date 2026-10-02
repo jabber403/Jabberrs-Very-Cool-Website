@@ -2,11 +2,11 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chat & DMs</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    
-    <link rel="stylesheet" href="style.css">
 
     <audio id="joinedSound" src="Joined.mp3" preload="auto"></audio>
     <audio id="leftSound" src="Left.mp3" preload="auto"></audio>
@@ -36,7 +36,7 @@
             <div id="chatBox" style="border: 1px solid black; height: 250px; overflow-y: scroll; margin-bottom: 10px; padding: 5px;"></div>
 
             <form id="chatForm" style="position: relative;">
-                <input type="text" id="messageInput" placeholder="Type a public message or use @username..." autocomplete="off" required style="width: 300px;">
+                <input type="text" id="messageInput" placeholder="Type a public message or use @username..." autocomplete="off" required style="width: 300px; max-width: 100%;">
                 <input type="file" id="fileInput">
                 <button type="submit">Send Public</button>
                 <div id="chatAutocomplete" style="border: 1px solid black; background: white; position: absolute; display: none; max-height: 100px; overflow-y: auto; width: 300px;"></div>
@@ -56,7 +56,7 @@
             <div id="dmBox" style="border: 1px solid black; height: 200px; overflow-y: scroll; margin-bottom: 10px; padding: 5px;"></div>
 
             <form id="dmForm" style="position: relative;">
-                <input type="text" id="dmInput" placeholder="Type a private message..." autocomplete="off" required style="width: 300px;">
+                <input type="text" id="dmInput" placeholder="Type a private message..." autocomplete="off" required style="width: 300px; max-width: 100%;">
                 <button type="submit" id="sendDmBtn" disabled>Send DM</button>
                 <div id="dmAutocomplete" style="border: 1px solid black; background: white; position: absolute; display: none; max-height: 100px; overflow-y: auto; width: 300px;"></div>
             </form>
