@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jabberrs Very Cool Website</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <!-- Top Right Header for Auth State -->
+    <div id="authHeader" style="position: absolute; top: 10px; right: 10px; text-align: right;">
+        <span id="userInfo" style="display: none; margin-right: 10px;">Logged in as: <strong id="displayUsername"></strong></span>
+        <button id="logoutBtn" style="display: none;" onclick="logout()">Log Out</button>
+        <a href="auth.html" id="loginLink">Login</a>
+    </div>
+
+    <h1 class="title-1">Welcome to Jabberrs Very Cool Website!!</h1>
+
+    <a href="./meetjabberr.html">Meet Jabberr</a>
+
+    <a href="https://www.venmo.com/u/Jabberrr">Donate?!</a>
+
+    <a href="https://cash.app/$Royceter13">Donate to Jabberrs Friend?!</a>
+
+    <h2 class="title-1">Chat!!</h2>
+    <div>
+        <a href="chat.html">Jabberrs Awesome Chat App</a>
+    </div>
+
+    <h3 class="title-1">info:</h3>
+    <div>
+        <p>Jabberrs Very Cool Website is made by Jabberr. THIS IS AN HTML CSS AND JAVASCRIPT WEBSITE NO AI NO DRAG AND DROP DUMB SHIT!!!</p>
+    </div>
+
+    <h2 class="title-1">Other websites:</h2>
+    <div>
+        <a href="https://bliinks.net">Bliinks Network</a>
+        <a href="https://jabbatube.up.railway.app/index.html">JabbaTube</a>
+    </div>
+
+    <h2 class="title-1">Post:</h2>
+    <div>
+        <a href="./jabberrsstuff.html">Jabberrs Amazing Posting Platform</a>
+    </div>
+
+    <h2 class="title-1">News:</h2>
+    <div>
+        <p>Halloween Update!!!</p>
+    </div>
+
+    <h1 class="title-1">Jabberrs Socials:</h1>
+    <div>
+        <a href="https://www.youtube.com/@RetroJabberr">Jabberrs YouTube (Retro Jabberr)</a>
+        <a href="https://github.com/jabber403">Jabberrs GitHub</a>
+    </div>
+
+    <h2 class="title-1">Developers!!</h2>
+    <div>
+        <h3 class="title-1">Jabberr</h3>
+    </div>
+
+    <h2 class="title-1">Music:</h2>
+    <div>
+        <a href="./music.html">Music</a>
+    </div>
+
+    <h6 class="title-1">Not Copyrighted 2026 Jabberrs_Not_Gay.co</h6>
+
+    <!-- Big Spooky Pumpkin & Text Pinned to Bottom Right Corner -->
+    <div style="position: fixed; bottom: 20px; right: 20px; text-align: center; z-index: 1000; pointer-events: none;">
+        <h1 style="color: #ff7700; font-size: 44px; text-shadow: 3px 3px #000000; margin: 0 0 5px 0;">Happy Halloween!!</h1>
+        <img src="Pumpkin.png" alt="Spooky Pumpkin" style="width: 170px; display: block; margin: 0 auto; filter: drop-shadow(0px 6px 12px rgba(255, 119, 0, 0.7));">
+    </div>
+
+    <script>
+        const username = localStorage.getItem('jabber_username');
+        const userInfo = document.getElementById('userInfo');
+        const displayUsername = document.getElementById('displayUsername');
+        const logoutBtn = document.getElementById('logoutBtn');
+        const loginLink = document.getElementById('loginLink');
+
+        if (username) {
+            displayUsername.textContent = username;
+            userInfo.style.display = 'inline';
+            logoutBtn.style.display = 'inline-block';
+            loginLink.style.display = 'none';
+        } else {
+            userInfo.style.display = 'none';
+            logoutBtn.style.display = 'none';
+            loginLink.style.display = 'inline';
+        }
+
+        function logout() {
+            localStorage.removeItem('jabber_username');
+            window.location.reload();
+        }
+    </script>
+</body>
+</html>
