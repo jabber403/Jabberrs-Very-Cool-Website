@@ -22,7 +22,7 @@
         <hr>
 
         <!-- Profile Modal View (Hidden by default) -->
-        <div id="profileModal" style="display: none; border: 2px solid orange; padding: 15px; margin-bottom: 20px; background: #1a1a1a;">
+        <div id="profileModal" style="display: none; border: 2px solid crimson; padding: 15px; margin-bottom: 20px; background: #1a1a1a;">
             <button onclick="closeProfile()">Close Profile</button>
             <h2 id="profileUsername"></h2>
             <p><strong>Followers:</strong> <span id="profileFollowersCount">Active</span> | <strong>Total Likes:</strong> <span id="profileLikesCount">0</span></p>
@@ -244,7 +244,7 @@
 
         function buildPostHTML(post) {
             const isMentioned = username && post.text.includes(`@${username}`);
-            let highlightStyle = isMentioned ? 'background-color: #ffff99; border: 1px solid orange; padding: 10px; margin-bottom: 10px;' : 'border: 1px solid black; padding: 10px; margin-bottom: 10px;';
+            let highlightStyle = isMentioned ? 'background-color: #ffff99; border: 1px solid crimson; padding: 10px; margin-bottom: 10px;' : 'border: 1px solid black; padding: 10px; margin-bottom: 10px;';
             const isFollowing = followingList.includes(post.username);
             const followBtnText = isFollowing ? 'Unfollow' : 'Follow';
 
@@ -263,7 +263,7 @@
                     let repliesHTML = '';
                     if (c.replies) {
                         c.replies.forEach(r => {
-                            repliesHTML += `<div style="margin-left: 20px; margin-top: 3px; border-left: 2px solid darkorange; padding-left: 5px;"><strong>${escapeHTML(r.username)}:</strong> ${escapeHTML(r.text)} <small>[${r.timestamp}]</small></div>`;
+                            repliesHTML += `<div style="margin-left: 20px; margin-top: 3px; border-left: 2px solid darkcrimson; padding-left: 5px;"><strong>${escapeHTML(r.username)}:</strong> ${escapeHTML(r.text)} <small>[${r.timestamp}]</small></div>`;
                         });
                     }
                     commentsHTML += `
